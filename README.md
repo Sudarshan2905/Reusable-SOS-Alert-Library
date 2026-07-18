@@ -25,6 +25,27 @@ Nothing else is required. No build step, no bundler, no dependencies of its
 own (it *optionally* reuses your ERP's `apiCall()` / `openToast()` from
 `utils.js` if that's already on the page — see [Integration with the ERP shell](#4-integration-with-the-erp-shell)).
 
+               User
+                 │
+                 ▼
+        SOS Button (HTML)
+                 │
+                 ▼
+             sos.js
+                 │
+        ┌────────┴────────┐
+        ▼                 ▼
+ GET /sos-alerts    POST /sos-alert
+        │                 │
+        ▼                 ▼
+      Node-RED REST API
+                 │
+                 ▼
+             MySQL Database
+        ┌────────┴─────────┐
+        ▼                  ▼
+    sosalerts      sosalert_history
+
 ---
 
 ## 2. Quick start
