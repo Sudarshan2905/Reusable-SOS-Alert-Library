@@ -1,0 +1,447 @@
+/* ============================================================
+   sos.css — SOS Emergency Alert Library
+   Namespaced under .sos-* to avoid any collision with ERP page
+   classes. Ships alongside sos.js on CloudFront.
+
+   Every value below is either:
+     (a) a --sos-* token derived from existing brand.css tokens
+         (with a safe fallback if brand.css isn't loaded), or
+     (b) a --sos-* token unique to this library (the red
+         "emergency" palette, which is intentionally distinct
+         from the orange --accent-primary brand color).
+
+   To re-theme the SOS widget for a different customer, edit
+   only the :root block below — no other rule needs to change.
+   ============================================================ */
+
+:root {
+  /* ---- Emergency red palette (SOS-specific, not brand accent) ---- */
+  --sos-red: #E63950;
+  --sos-red-dark: #B91C3C;
+  --sos-red-darker: #7A1224;
+  --sos-red-tint: rgba(230, 57, 80, 0.15);
+  --sos-red-tint-hover: rgba(230, 57, 80, 0.28);
+
+  /* ---- Surfaces / shadows / radius — reuse brand.css tokens ---- */
+  --sos-bg-modal: var(--bg-surface, #1b1b1d);
+  --sos-bg-page: var(--bg-dark, #171717);
+  --sos-shadow: var(--modal-shadow, 0 24px 64px rgba(0, 0, 0, 0.6));
+  --sos-backdrop: var(--modal-backdrop-color, rgba(0, 0, 0, 0.55));
+  --sos-radius-lg: var(--radius-lg, 24px);
+  --sos-radius-md: var(--form-radius, 14px);
+  --sos-radius-sm: var(--radius-sm, 10px);
+
+  /* ---- Borders — reuse brand.css structural tokens ---- */
+  --sos-border-width: var(--border-width-default, 1px);
+  --sos-border-style: var(--border-style-default, solid);
+  --sos-border-color: var(--c-border, #f5f5f550);
+  /* NEW (item 9) — composite shorthand for the common width+style+color
+     case, so callers don't repeat all three every time. Use directly
+     only where the color is --sos-border-color; anywhere a different
+     border color is needed (e.g. --sos-red, --form-border) still
+     compose the three parts explicitly. */
+  --sos-border: var(--sos-border-width) var(--sos-border-style) var(--sos-border-color);
+
+  /* ---- Text ---- */
+  --sos-text: var(--c-light, #ffffff);
+  --sos-text-muted: var(--c-muted, #d1d1d1);
+
+  /* ---- Motion ---- */
+  --sos-transition: var(--transition-base, 0.3s ease-in-out);
+  --sos-transition-fast: var(--btn-transition, 0.15s ease-in-out);
+
+  /* ---- Typography ---- */
+  --sos-font: var(--font-family, "Poppins", sans-serif);
+
+  /* ---- Z-index — sits above everything, including existing toasts/modals ---- */
+  --sos-z: 100000;
+}
+
+/* ============================================================
+   TRIGGER BUTTON (optional helper class — developer's own
+   #btnSOS button is used as-is; this class is purely opt-in
+   styling for a floating round SOS button, matching the
+   provided screenshot, if the developer wants it.)
+   ============================================================ */
+.sos-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  background: radial-gradient(circle at 35% 30%, var(--sos-red), var(--sos-red-dark));
+  color: var(--sos-text);
+  font-family: var(--sos-font);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 0 6px var(--sos-red-tint), 0 8px 24px rgba(0, 0, 0, 0.5);
+  transition: transform var(--sos-transition-fast), box-shadow var(--sos-transition-fast);
+}
+
+.sos-trigger:hover {
+  transform: scale(1.06);
+  box-shadow: 0 0 0 8px var(--sos-red-tint-hover), 0 10px 28px rgba(0, 0, 0, 0.55);
+}
+
+.sos-trigger:active {
+  transform: scale(0.97);
+}
+
+/* ============================================================
+   OVERLAY (backdrop + blur)
+   ============================================================ */
+.sos-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--sos-z);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--sos-backdrop);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--sos-transition), visibility var(--sos-transition);
+}
+
+.sos-overlay.sos-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+.sos-modal {
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--sos-bg-modal);
+  border-radius: var(--sos-radius-lg);
+  box-shadow: var(--sos-shadow);
+  font-family: var(--sos-font);
+  transform: translateY(24px) scale(0.96);
+  opacity: 0;
+  transition: transform var(--sos-transition), opacity var(--sos-transition);
+}
+
+.sos-overlay.sos-open .sos-modal {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* ---- Header — red gradient ---- */
+.sos-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  background: linear-gradient(135deg, var(--sos-red), var(--sos-red-dark));
+  flex-shrink: 0;
+}
+
+.sos-title {
+  margin: 0;
+  color: var(--sos-text);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.sos-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--sos-text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--sos-transition-fast);
+}
+
+.sos-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ---- Body ---- */
+.sos-body {
+  padding: 20px 22px 4px;
+  overflow-y: auto;
+}
+
+.sos-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  color: var(--sos-red);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.sos-label-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/* ---- Alert grid ---- */
+.sos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+@media screen and (max-width: 900px) {
+  .sos-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media screen and (max-width: 520px) {
+  .sos-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.sos-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: var(--sos-border);
+  border-radius: var(--sos-radius-sm);
+  background: var(--sos-bg-page);
+  color: var(--sos-text-muted);
+  font-family: var(--sos-font);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  line-height: 1.3;
+  cursor: pointer;
+  transition:
+    background var(--sos-transition-fast),
+    border-color var(--sos-transition-fast),
+    color var(--sos-transition-fast),
+    transform var(--sos-transition-fast);
+}
+
+/* Full-width variant for a lone "Other" style option */
+.sos-alert--wide {
+  grid-column: 1 / -1;
+}
+
+.sos-alert:hover {
+  border-color: var(--sos-red);
+  color: var(--sos-text);
+  background: var(--sos-red-tint);
+}
+
+.sos-alert:active {
+  transform: scale(0.98);
+}
+
+.sos-alert.sos-selected {
+  background: linear-gradient(135deg, var(--sos-red), var(--sos-red-dark));
+  border-color: var(--sos-red);
+  color: var(--sos-text);
+}
+
+.sos-alert:focus-visible {
+  outline: none;
+  box-shadow: var(--form-ring-size, 0 0 0 3px) var(--sos-red-tint);
+}
+
+/* ============================================================
+   "OTHER" FREE-TEXT REASON — NEW
+   Hidden by default; revealed only when the "Other" alert
+   button is selected. Reuses the same CopperCloud form tokens
+   (--form-*) that the ERP's own .inp class uses, so it matches
+   host-page input styling. Fully responsive — no media queries
+   needed since it's already 100% width within .sos-body.
+   ============================================================ */
+.sos-other-wrapper {
+  margin: 0 0 20px;
+}
+
+.sos-other-input {
+  display: block;
+  width: 100%;
+  padding: var(--inp-padding-top, 18px) var(--inp-padding-x, 14px) var(--inp-padding-bottom, 8px);
+  border-radius: var(--sos-radius-md);
+  border: var(--sos-border-width) var(--sos-border-style) var(--form-border, rgba(239, 128, 28, 0.25));
+  background-color: var(--form-surface, #141414);
+  color: var(--sos-text);
+  font-family: var(--sos-font);
+  font-size: var(--fs-input, 18px);
+  font-weight: var(--inp-font-weight, 500);
+  outline: none;
+  box-sizing: border-box;
+  transition: var(--inp-transition, 0.2s ease);
+}
+
+.sos-other-input::placeholder {
+  color: var(--form-muted, #888888);
+}
+
+.sos-other-input:hover {
+  background-color: var(--form-surface-hover, #1e1e1e);
+}
+
+/* Focus ring uses the SOS red palette (not the brand accent) so it
+   stays visually consistent with the rest of the emergency modal. */
+.sos-other-input:focus {
+  border-color: var(--sos-red);
+  box-shadow: var(--form-ring-size, 0 0 0 3px) var(--sos-red-tint);
+}
+
+/* Generic hidden-state utility, scoped to this component only
+   (does not touch the shared .hidden class used elsewhere). */
+.sos-other-hidden {
+  display: none;
+}
+
+/* NEW (item 6) — live "N / 150" counter under the Other input. */
+.sos-other-counter {
+  margin: 6px 2px 0;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sos-text-muted);
+  font-family: var(--sos-font);
+}
+
+/* ---- Empty / loading / error states ---- */
+.sos-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px 10px;
+  color: var(--sos-text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.sos-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 3px solid var(--sos-border-color);
+  border-top-color: var(--sos-red);
+  animation: sos-spin 0.8s linear infinite;
+}
+
+@keyframes sos-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sos-retry {
+  border: var(--sos-border-width) var(--sos-border-style) var(--sos-red);
+  background: transparent;
+  color: var(--sos-red);
+  padding: 8px 16px;
+  border-radius: var(--sos-radius-sm);
+  font-family: var(--sos-font);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  cursor: pointer;
+  transition: background var(--sos-transition-fast), color var(--sos-transition-fast);
+}
+
+.sos-retry:hover {
+  background: var(--sos-red);
+  color: var(--sos-text);
+}
+
+/* ---- Footer ---- */
+.sos-footer {
+  padding: 16px 22px 22px;
+  flex-shrink: 0;
+}
+
+.sos-send {
+  width: 100%;
+  border: none;
+  border-radius: var(--sos-radius-sm);
+  padding: 14px 18px;
+  background: linear-gradient(135deg, var(--sos-red-dark), var(--sos-red-darker));
+  color: var(--sos-text);
+  font-family: var(--sos-font);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: filter var(--sos-transition-fast), transform var(--sos-transition-fast), opacity var(--sos-transition-fast);
+}
+
+.sos-send:not(:disabled):hover {
+  filter: brightness(1.12);
+}
+
+.sos-send:not(:disabled):active {
+  transform: scale(0.99);
+}
+
+.sos-send:disabled,
+.sos-send[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* NEW (item 5) — lightweight inline spinner shown inside .sos-send
+   while sending; reuses the same spin keyframes as .sos-spinner. */
+.sos-send-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  vertical-align: -2px;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: var(--sos-text);
+  animation: sos-spin 0.7s linear infinite;
+}
+
+/* ============================================================
+   Reduced motion support
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  .sos-overlay,
+  .sos-modal,
+  .sos-alert,
+  .sos-send,
+  .sos-send-spinner,
+  .sos-trigger,
+  .sos-close {
+    transition: none !important;
+    animation-duration: 0.001ms !important;
+  }
+}

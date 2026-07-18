@@ -1,0 +1,210 @@
+[
+    {
+        "id": "sos_flow_tab",
+        "type": "tab",
+        "label": "SOS Library API",
+        "disabled": false,
+        "info": "SOS Alerts API - GET distinct alerts, POST new alert. No auth, no subflows."
+    },
+    {
+        "id": "sos_http_in1",
+        "type": "http in",
+        "z": "sos_flow_tab",
+        "name": "GET /sos-alerts",
+        "url": "/sos-alerts",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "sos_func_prep1"
+            ]
+        ]
+    },
+    {
+        "id": "sos_func_prep1",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Prepare Alerts Query",
+        "func": "msg.topic = \"SELECT DISTINCT alert FROM sosalerts WHERE alert IS NOT NULL ORDER BY alert ASC;\";\nmsg.payload = [];\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 100,
+        "wires": [
+            [
+                "sos_mysql1"
+            ]
+        ]
+    },
+    {
+        "id": "sos_mysql1",
+        "type": "mysql",
+        "z": "sos_flow_tab",
+        "mydb": "c0be5e4c52ab8c07",
+        "name": "",
+        "x": 700,
+        "y": 100,
+        "wires": [
+            [
+                "sos_func_format1"
+            ]
+        ]
+    },
+    {
+        "id": "sos_func_format1",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Format Alerts Response",
+        "func": "msg.statusCode = 200;\nmsg.payload = {\n    success: true,\n    alerts: msg.payload\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 990,
+        "y": 100,
+        "wires": [
+            [
+                "sos_http_resp1"
+            ]
+        ]
+    },
+    {
+        "id": "sos_http_resp1",
+        "type": "http response",
+        "z": "sos_flow_tab",
+        "name": "HTTP Response - Alerts",
+        "statusCode": "",
+        "headers": {},
+        "x": 1310,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "sos_http_in2",
+        "type": "http in",
+        "z": "sos_flow_tab",
+        "name": "POST /sos-alert",
+        "url": "/sos-alert",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 140,
+        "y": 260,
+        "wires": [
+            [
+                "sos_json2"
+            ]
+        ]
+    },
+    {
+        "id": "sos_json2",
+        "type": "json",
+        "z": "sos_flow_tab",
+        "name": "Parse Request Body",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 380,
+        "y": 260,
+        "wires": [
+            [
+                "sos_func_validate2"
+            ]
+        ]
+    },
+    {
+        "id": "sos_func_validate2",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Validate & Prepare Insert",
+        "func": "var body = msg.payload || {};\nvar alert = body.alert;\nvar machineid = (body.machineid === undefined || body.machineid === null || body.machineid === '') ? null : body.machineid;\n\nif (!alert || alert.toString().trim() === '') {\n    var errMsg = { ...msg };\n    errMsg.statusCode = 400;\n    errMsg.payload = {\n        success: false,\n        message: \"Alert is required.\"\n    };\n    return [null, errMsg];\n}\n\nmsg.topic = \"INSERT INTO sosalert_history (machineid, alert) VALUES (?, ?);\";\nmsg.payload = [machineid, alert];\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 630,
+        "y": 260,
+        "wires": [
+            [
+                "sos_mysql2"
+            ],
+            [
+                "sos_http_resp2"
+            ]
+        ]
+    },
+    {
+        "id": "sos_mysql2",
+        "type": "mysql",
+        "z": "sos_flow_tab",
+        "mydb": "c0be5e4c52ab8c07",
+        "name": "",
+        "x": 880,
+        "y": 220,
+        "wires": [
+            [
+                "sos_func_success2"
+            ]
+        ]
+    },
+    {
+        "id": "sos_func_success2",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Success Response",
+        "func": "msg.statusCode = 200;\nmsg.payload = {\n    success: true,\n    message: \"SOS Alert Saved Successfully\"\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1090,
+        "y": 220,
+        "wires": [
+            [
+                "sos_http_resp2"
+            ]
+        ]
+    },
+    {
+        "id": "sos_http_resp2",
+        "type": "http response",
+        "z": "sos_flow_tab",
+        "name": "HTTP Response - Alert Save",
+        "statusCode": "",
+        "headers": {},
+        "x": 1350,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "c0be5e4c52ab8c07",
+        "type": "MySQLdatabase",
+        "name": "ccdevdb",
+        "host": "ls-aa22ad8183f50a35f9bd357eb259c887b0134ec1.cwrwf5hsrgjs.ca-central-1.rds.amazonaws.com",
+        "port": "3306",
+        "db": "standard_db",
+        "tz": "",
+        "charset": "UTF8"
+    },
+    {
+        "id": "f0146e94ad8b5b6f",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-node-mysql": "3.0.0"
+        }
+    }
+]

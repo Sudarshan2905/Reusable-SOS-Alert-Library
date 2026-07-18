@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOS Library — Demo</title>
+  <meta name="robots" content="noindex, nofollow" />
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Existing ERP libraries (order matters) -->
+  <link rel="stylesheet" href="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/v2/core.css" />
+  <link rel="stylesheet" href="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/v2/brand.css" />
+  <link rel="stylesheet" href="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/v2/form.css" />
+
+  <!-- SOS Library -->
+  <link rel="stylesheet" href="sos.css" />
+
+  <style>
+    /* Page-level demo styles only — uses tokens, no hardcoded values */
+    .demo-wrap {
+      max-width: 480px;
+      margin: 60px auto;
+      padding: 0 20px;
+      font-family: var(--font-family, "Poppins", sans-serif);
+      color: var(--c-content, #e1e1e1);
+    }
+
+    .demo-title {
+      font-size: var(--fs-page-title, 22px);
+      color: var(--c-light, #fff);
+      margin-bottom: 8px;
+    }
+
+    .demo-subtitle {
+      color: var(--c-muted, #d1d1d1);
+      font-size: var(--fs-small, 14px);
+      margin-bottom: var(--section-gap, 20px);
+    }
+
+    .demo-field {
+      margin-bottom: var(--form-gap, 22px);
+    }
+
+    .demo-field label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: var(--fs-label, 16px);
+      color: var(--c-content, #e1e1e1);
+    }
+
+    .demo-field select {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--form-surface, #141414);
+      border: var(--border-width-default, 1px) var(--border-style-default, solid) var(--form-border, rgba(239,128,28,0.25));
+      border-radius: var(--form-radius, 14px);
+      color: var(--c-light, #fff);
+      font-family: inherit;
+      font-size: var(--fs-input, 18px);
+    }
+
+    .demo-trigger-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 30px;
+    }
+  </style>
+</head>
+<body style="background: var(--bg-page, #171717); margin:0; min-height:100vh;">
+
+  <div class="demo-wrap">
+    <div class="demo-title">SOS Library — Integration Demo</div>
+    <div class="demo-subtitle">
+      Select a machine, then click the SOS button. Everything else
+      (popup, alerts, submission) is handled automatically by sos.js.
+    </div>
+
+    <div class="demo-field">
+      <label for="demo-machine-select">Machine</label>
+      <select id="demo-machine-select">
+        <option value="ST1">ST1</option>
+        <option value="ST2">ST2</option>
+        <option value="ST3">ST3</option>
+        <option value="LM1">LM1</option>
+      </select>
+    </div>
+
+    <div class="demo-trigger-row">
+      <button id="btnSOS" class="sos-trigger" type="button">SOS</button>
+      <span class="demo-subtitle" style="margin:0;">Tap to report an emergency alert</span>
+    </div>
+  </div>
+
+  <!-- Required global overlays (used by openToast / openModal from utils.js) -->
+  <div id="modal-backdrop"></div>
+  <div class="toast-container top-right" id="toast-container"></div>
+  <div id="tooltip"></div>
+
+  <!-- Existing ERP scripts (order matters) -->
+  <script src="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/utils.js"></script>
+  <script src="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/core.js"></script>
+
+  <!-- SOS Library -->
+  <script src="sos.js"></script>
+
+  <script>
+    // Page-specific wiring only — no popup HTML, no SOS internals here.
+    document.addEventListener('DOMContentLoaded', () => {
+      const machineSelect = document.getElementById('demo-machine-select');
+
+      SOS.init({
+        button: '#btnSOS',
+        machineId: () => machineSelect.value,   // always reads the currently selected machine
+        apiBase: 'http://127.0.0.1:1880'                          // GET /app/sos-alerts, POST /app/sos-alert
+      });
+    });
+  </script>
+
+</body>
+</html>
