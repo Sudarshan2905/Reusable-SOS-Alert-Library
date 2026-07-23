@@ -53,24 +53,23 @@ own (it *optionally* reuses your ERP's `apiCall()` / `openToast()` from
 ### 2.1 Add the files to your page
 
 ```html
-<!-- CSS: anywhere in <head>, after your existing ERP stylesheets -->
-<link rel="stylesheet" href="sos.css" />
 
-<!-- Your own trigger button, anywhere in the page body -->
-<button id="btnSOS" class="sos-trigger" type="button">SOS</button>
+<head>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/Sudarshan2905/Reusable-SOS-Alert-Library@main/sos.css">
+</head>
 
-<!-- Required global overlays if not already on the page (used by
-     openToast()/openModal() from the ERP's utils.js) -->
-<div id="modal-backdrop"></div>
-<div class="toast-container top-right" id="toast-container"></div>
-<div id="tooltip"></div>
+<body style="padding:40px;font-family:Arial">
 
-  <!-- Existing ERP scripts (order matters) -->
-  <script src="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/utils.js"></script>
-  <script src="https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/core.js"></script>
+    <h2>SOS Library Test</h2>
 
-  <!-- SOS Library -->
-  <script src="sos.js"></script>
+    <button id="btnSOS" class="sos-trigger">
+        SOS
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/gh/Sudarshan2905/Reusable-SOS-Alert-Library@main/sos.js">
+
+    </script>
 ```
 
 ### 2.2 Initialize it

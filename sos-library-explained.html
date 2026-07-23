@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>How the SOS Library Was Built — Explained</title>
+<style>
+  :root{
+    --bg:#121016;
+    --panel:#1a171f;
+    --panel2:#201c26;
+    --ink:#f2eef7;
+    --muted:#a79bb8;
+    --line:#332c3f;
+
+    --html:#ff9f5b;   /* HTML concepts   – amber   */
+    --css:#5bc4ff;    /* CSS concepts    – blue    */
+    --js:#ffe066;     /* JS concepts     – yellow  */
+    --async:#7ee3b5;  /* async / network – mint    */
+    --a11y:#c792ff;   /* accessibility   – violet  */
+    --db:#ff6b81;     /* backend / SQL   – rose    */
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #24162a 0%, transparent 60%),
+      radial-gradient(1000px 500px at 100% 0%, #10202a 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:"Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height:1.65;
+    padding-bottom:80px;
+  }
+
+  code, pre{ font-family:"Consolas","SF Mono",Menlo,monospace; }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:64px 24px 40px;
+    max-width:900px;
+    margin:0 auto;
+    text-align:center;
+  }
+  .hero .eyebrow{
+    display:inline-block;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--async);
+    background:rgba(126,227,181,.08);
+    border:1px solid rgba(126,227,181,.3);
+    padding:6px 14px;
+    border-radius:999px;
+    margin-bottom:18px;
+  }
+  .hero h1{
+    font-size:clamp(28px,5vw,44px);
+    margin:0 0 14px;
+    letter-spacing:-0.01em;
+  }
+  .hero h1 span{ color:var(--js); }
+  .hero p{ color:var(--muted); font-size:16px; max-width:640px; margin:0 auto; }
+
+  /* ---------- Legend ---------- */
+  .legend{
+    max-width:900px;
+    margin:28px auto 0;
+    padding:0 24px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:center;
+  }
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-size:12.5px;
+    font-weight:600;
+    padding:7px 12px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--muted);
+  }
+  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+
+  /* ---------- Layout ---------- */
+  .wrap{ max-width:900px; margin:0 auto; padding:0 24px; }
+
+  .toc{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:22px 26px;
+    margin:36px 0;
+  }
+  .toc h2{margin:0 0 12px; font-size:14px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);}
+  .toc ol{margin:0; padding-left:20px; columns:2; column-gap:28px;}
+  .toc li{margin-bottom:8px; font-size:14.5px;}
+  .toc a{color:var(--ink); text-decoration:none; border-bottom:1px dashed transparent;}
+  .toc a:hover{border-bottom-color:var(--muted);}
+
+  /* ---------- Step ---------- */
+  .step{
+    position:relative;
+    margin:56px 0;
+    padding:30px 30px 32px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+    border-left:4px solid var(--tag, var(--js));
+  }
+  .step-head{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom:6px;
+    flex-wrap:wrap;
+  }
+  .step-num{
+    font-size:13px;
+    font-weight:800;
+    color:var(--bg);
+    background:var(--tag, var(--js));
+    width:30px;height:30px;
+    border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .step h2{ margin:0; font-size:21px; }
+  .tag{
+    margin-left:auto;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:var(--tag, var(--js));
+    background:color-mix(in srgb, var(--tag, var(--js)) 14%, transparent);
+    border:1px solid color-mix(in srgb, var(--tag, var(--js)) 40%, transparent);
+    padding:4px 10px;
+    border-radius:999px;
+  }
+  .step p{ color:#dcd4e8; font-size:15.5px; }
+  .step p.muted{ color:var(--muted); font-size:14.5px; }
+  .why{
+    margin:16px 0;
+    padding:14px 16px;
+    border-radius:10px;
+    background:rgba(255,255,255,.03);
+    border:1px dashed var(--line);
+    font-size:14.5px;
+    color:var(--muted);
+  }
+  .why b{ color:var(--tag, var(--js)); }
+
+  pre{
+    margin:16px 0 0;
+    background:#0d0b11;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:13.2px;
+    line-height:1.6;
+    color:color-mix(in srgb, var(--tag, var(--js)) 78%, white);
+  }
+  pre .c{ color:var(--muted); font-style:italic; }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+  @media (max-width:640px){ .grid2{ grid-template-columns:1fr; } .toc ol{ columns:1; } }
+
+  .mini{
+    background:var(--panel2);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 16px;
+    font-size:13.5px;
+    color:var(--muted);
+  }
+  .mini b{ color:var(--ink); display:block; margin-bottom:4px; font-size:13px; }
+
+  .flow{
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    margin:18px 0 4px; font-size:13px; color:var(--muted);
+  }
+  .flow span.node{
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    padding:6px 10px; color:var(--ink); font-weight:600;
+  }
+  .flow span.arrow{ color:var(--muted); }
+
+  footer{
+    max-width:900px; margin:60px auto 0; padding:0 24px;
+    color:var(--muted); font-size:13.5px; text-align:center;
+  }
+</style>
+</head>
+<body>
+
+  <div class="hero">
+    <span class="eyebrow">Build walkthrough</span>
+    <h1>How the <span>SOS Library</span> was actually built</h1>
+    <p>Same widget, explained slowly. Every concept — HTML, CSS, JavaScript, networking,
+       accessibility, and the backend — broken into one idea at a time, in plain language.</p>
+  </div>
+
+  <div class="legend">
+    <span class="chip"><span class="dot" style="background:var(--html)"></span>HTML concept</span>
+    <span class="chip"><span class="dot" style="background:var(--css)"></span>CSS concept</span>
+    <span class="chip"><span class="dot" style="background:var(--js)"></span>JavaScript concept</span>
+    <span class="chip"><span class="dot" style="background:var(--async)"></span>Networking / async</span>
+    <span class="chip"><span class="dot" style="background:var(--a11y)"></span>Accessibility</span>
+    <span class="chip"><span class="dot" style="background:var(--db)"></span>Backend / database</span>
+  </div>
+
+  <div class="wrap">
+
+    <div class="toc">
+      <h2>What we'll cover, in order</h2>
+      <ol>
+        <li><a href="#s1">The idea — one button, no page HTML</a></li>
+        <li><a href="#s2">Splitting the files (separation of concerns)</a></li>
+        <li><a href="#s3">CSS custom properties (design tokens)</a></li>
+        <li><a href="#s4">The IIFE + closure (why <code>SOS</code> is safe)</a></li>
+        <li><a href="#s5">A single <code>state</code> object</a></li>
+        <li><a href="#s6">Building the modal with JavaScript</a></li>
+        <li><a href="#s7">Render functions for every state</a></li>
+        <li><a href="#s8">Event binding &amp; delegation</a></li>
+        <li><a href="#s9">Accessibility: focus trap &amp; ARIA</a></li>
+        <li><a href="#s10">Talking to the server: fetch, apiCall, CORS</a></li>
+        <li><a href="#s11">async/await + try/catch/finally</a></li>
+        <li><a href="#s12">Conditional UI: the "Other" text box</a></li>
+        <li><a href="#s13">Caching &amp; cancelling requests</a></li>
+        <li><a href="#s14">Designing the public API</a></li>
+        <li><a href="#s15">The backend: Node-RED + MySQL</a></li>
+      </ol>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="step" id="s1" style="--tag:var(--html)">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <h2>The idea: one button, no HTML on the page</h2>
+        <span class="tag">HTML</span>
+      </div>
+      <p>Most widgets ask you to paste a chunk of HTML onto every page that
+         uses them (the modal markup, the buttons, the footer). That's fragile —
+         if you update the markup, every page that copy-pasted it goes out of date.</p>
+      <p>Instead, the SOS library only asks the page for <b>one thing that already
+         exists</b>: a trigger button.</p>
+      <pre>&lt;button id="btnSOS"&gt;SOS&lt;/button&gt;</pre>
+      <div class="why"><b>Why:</b> every other page just needs that one line, plus
+         <code>SOS.init(...)</code>. The entire modal — header, grid, footer — is
+         created by JavaScript the first time it's opened, so there's exactly one
+         place that markup can go wrong: <code>sos.js</code> itself.</div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step" id="s2" style="--tag:var(--html)">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <h2>Splitting the files (separation of concerns)</h2>
+        <span class="tag">Architecture</span>
+      </div>
+      <p>Four files, four jobs. This is a very old, very useful idea in software:
+         each file should have <b>one reason to change</b>.</p>
+      <div class="grid2">
+        <div class="mini"><b>sos.js</b>All behavior. DOM creation, state, events, networking.</div>
+        <div class="mini"><b>sos.css</b>All appearance. Colors, spacing, animation.</div>
+        <div class="mini"><b>sos-flow.json</b>The backend. Two HTTP endpoints + SQL.</div>
+        <div class="mini"><b>sos-demo.html</b>An example of gluing it all together.</div>
+      </div>
+      <div class="why"><b>Why:</b> a designer can re-theme the whole widget by
+         editing only <code>sos.css</code>'s <code>:root</code> block, without ever
+         opening <code>sos.js</code> — and vice versa. That's the payoff of the split.</div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step" id="s3" style="--tag:var(--css)">
+      <div class="step-head">
+        <div class="step-num">3</div>
+        <h2>CSS custom properties (design tokens)</h2>
+        <span class="tag">CSS</span>
+      </div>
+      <p>Instead of writing <code>#E63950</code> forty times across the file, we
+         write it <b>once</b>, name it, and refer to the name everywhere else.</p>
+      <pre>:root {
+  <span class="c">/* declare it once */</span>
+  --sos-red: #E63950;
+}
+
+.sos-send {
+  <span class="c">/* use the name everywhere */</span>
+  background: linear-gradient(135deg, var(--sos-red), var(--sos-red-dark));
+}</pre>
+      <p>We go one step further and give every token a <b>fallback</b>:</p>
+      <pre>--sos-shadow: var(--modal-shadow, 0 24px 64px rgba(0,0,0,.6));
+<span class="c">/*            ^ read the host page's own brand token first
+                if it's missing, use this literal value instead */</span></pre>
+      <div class="why"><b>Why:</b> on an ERP page that already has
+         <code>brand.css</code> loaded, SOS automatically matches the house style
+         (same shadow depth, same border radius). On a page that doesn't have it,
+         the fallback keeps SOS looking correct anyway. One rule, two situations.</div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step" id="s4" style="--tag:var(--js)">
+      <div class="step-head">
+        <div class="step-num">4</div>
+        <h2>The IIFE + closure — why <code>SOS</code> is safe</h2>
+        <span class="tag">JavaScript</span>
+      </div>
+      <p>The whole file is wrapped in a function that runs itself immediately:</p>
+      <pre><span class="c">// IIFE = Immediately Invoked Function Expression</span>
+const SOS = (() => {
+  'use strict';
+  let config = { ... };   <span class="c">// private — nobody outside can touch this</span>
+  let state  = { ... };   <span class="c">// private too</span>
+
+  const init = (options) => { ... };
+  const destroy = () => { ... };
+
+  return { init, destroy, open, close };  <span class="c">// only these 4 are public</span>
+})();</pre>
+      <p>Everything declared inside — <code>config</code>, <code>state</code>,
+         every helper function — lives in a private bubble called a
+         <b>closure</b>. Only the four things in the final <code>return</code>
+         are visible outside as <code>SOS.init()</code>, <code>SOS.destroy()</code>, etc.</p>
+      <div class="why"><b>Why:</b> a page can't accidentally do
+         <code>SOS.state.selectedAlert = 'hacked'</code> from the console — that
+         property simply doesn't exist outside the closure. It's how the library
+         protects itself from every other script on the page, including itself
+         being loaded twice.</div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step" id="s5" style="--tag:var(--js)">
+      <div class="step-head">
+        <div class="step-num">5</div>
+        <h2>One <code>state</code> object to describe "right now"</h2>
+        <span class="tag">JavaScript</span>
+      </div>
+      <p>Instead of scattering booleans and variables everywhere, every fact
+         about the widget's current moment lives in one plain object:</p>
+      <pre>let state = {
+  alerts: [],            <span class="c">// what the server returned</span>
+  selectedAlert: null,    <span class="c">// which button is picked</span>
+  selectedIsCustom: false,<span class="c">// is it the "Other" reason?</span>
+  isLoading: false,        <span class="c">// GET in progress?</span>
+  isSending: false,        <span class="c">// POST in progress?</span>
+  cacheTimestamp: 0,       <span class="c">// when we last fetched</span>
+  abortController: null,   <span class="c">// how to cancel a fetch</span>
+};</pre>
+      <div class="why"><b>Why:</b> every function that needs to decide something
+         ("can Send be clicked?") reads from this one object instead of five
+         different variables. It also makes <code>SOS.destroy()</code> trivial —
+         resetting the whole widget is just replacing this one object.</div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="step" id="s6" style="--tag:var(--html)">
+      <div class="step-head">
+        <div class="step-num">6</div>
+        <h2>Building the modal with JavaScript, not HTML</h2>
+        <span class="tag">DOM</span>
+      </div>
+      <p>The very first time someone opens the modal, this function runs
+         <b>once</b> and builds the whole thing:</p>
+      <pre>const createModal = () => {
+  const overlay = document.createElement('div');
+  overlay.className = 'sos-overlay';
+  overlay.innerHTML = `
+    &lt;div class="sos-modal"&gt;
+      &lt;div class="sos-header"&gt;...&lt;/div&gt;
+      &lt;div class="sos-grid"&gt;&lt;/div&gt;  <span class="c">&lt;!-- filled in later --&gt;</span>
+      &lt;div class="sos-footer"&gt;...&lt;/div&gt;
+    &lt;/div&gt;`;
+  document.body.appendChild(overlay);
+
+  els.overlay = overlay;                          <span class="c">// keep a reference</span>
+  els.grid = overlay.querySelector('.sos-grid');   <span class="c">// so we can find it fast later</span>
+};</pre>
+      <p>Every later <code>openModal()</code> call checks
+         <code>if (!els.overlay) createModal();</code> — so the expensive "build
+         the DOM" step only ever happens once, no matter how many times the
+         user opens and closes it.</p>
+    </div>
+
+    <!-- STEP 7 -->
+    <div class="step" id="s7" style="--tag:var(--js)">
+      <div class="step-head">
+        <div class="step-num">7</div>
+        <h2>A render function for every possible state</h2>
+        <span class="tag">JavaScript</span>
+      </div>
+      <p>The little grid of reason buttons can be in exactly one of four
+         situations at any moment. We write one function per situation, and one
+         line of logic decides which one runs:</p>
+      <div class="grid2">
+        <div class="mini"><b>renderLoading()</b>Spinner + "Loading…" while the GET is in flight.</div>
+        <div class="mini"><b>renderAlerts()</b>The real buttons, once data arrives.</div>
+        <div class="mini"><b>renderEmpty()</b>Server responded, but with zero reasons.</div>
+        <div class="mini"><b>renderError()</b>The request failed — shows a Retry button.</div>
+      </div>
+      <div class="why"><b>Why:</b> this is far easier to reason about than one
+         giant function with lots of <code>if</code>s scattered through it. Each
+         function does exactly one job, and you can test/read them in isolation.</div>
+    </div>
+
+    <!-- STEP 8 -->
+    <div class="step" id="s8" style="--tag:var(--js)">
+      <div class="step-head">
+        <div class="step-num">8</div>
+        <h2>Event binding &amp; delegation</h2>
+        <span class="tag">JavaScript</span>
+      </div>
+      <p>The grid of reason buttons is thrown away and rebuilt every time the
+         list changes. If we attached a click listener to <i>each button</i>,
+         we'd have to re-attach it every single re-render — messy, and easy to
+         leak. Instead, we listen once on the parent:</p>
+      <pre>const onGridClick = (e) => {
+  const btn = e.target.closest('.sos-alert');  <span class="c">// "which button, if any?"</span>
+  if (btn) selectAlert(btn);
+};
+
+els.grid.addEventListener('click', onGridClick);  <span class="c">// bound ONCE, forever</span></pre>
+      <div class="why"><b>Why:</b> this is called <b>event delegation</b> — one
+         listener on a stable parent handles clicks on any number of children,
+         even ones that don't exist yet at the time you wrote the listener.</div>
+    </div>
+
+    <!-- STEP 9 -->
+    <div class="step" id="s9" style="--tag:var(--a11y)">
+      <div class="step-head">
+        <div class="step-num">9</div>
+        <h2>Accessibility: the focus trap &amp; ARIA</h2>
+        <span class="tag">Accessibility</span>
+      </div>
+      <p>Two problems every modal has to solve for someone using only a
+         keyboard or a screen reader:</p>
+      <p><b>1. Tab shouldn't escape the modal.</b> We find every focusable
+         element inside it, and if <kbd>Tab</kbd> would move focus past the last
+         one, we loop back to the first:</p>
+      <pre>if (e.key === 'Tab') {
+  const focusable = els.modal.querySelectorAll(
+    'button:not([disabled]), input:not([disabled])'
+  );
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}</pre>
+      <p><b>2. Screen readers need to know what's on screen without seeing it.</b>
+         That's what these attributes are for:</p>
+      <pre>&lt;div class="sos-modal" role="dialog" aria-modal="true" aria-labelledby="sos-title"&gt;
+&lt;div class="sos-state" role="status" aria-live="polite"&gt;   <span class="c">&lt;!-- loading --&gt;</span>
+&lt;div class="sos-state" role="alert"&gt;                       <span class="c">&lt;!-- error --&gt;</span></pre>
+      <div class="why"><b>Why:</b> <code>aria-live="polite"</code> makes a screen
+         reader announce "Loading alert reasons…" the instant it appears, without
+         the user having to go looking for it. <code>role="dialog"</code> tells
+         assistive tech "everything outside this is temporarily irrelevant."</div>
+    </div>
+
+    <!-- STEP 10 -->
+    <div class="step" id="s10" style="--tag:var(--async)">
+      <div class="step-head">
+        <div class="step-num">10</div>
+        <h2>Talking to the server: fetch, apiCall, and CORS</h2>
+        <span class="tag">Networking</span>
+      </div>
+      <p>There are two different situations the library has to handle:</p>
+      <div class="grid2">
+        <div class="mini"><b>Same origin as the ERP</b>Use the ERP's own <code>apiCall()</code> helper, so login/session cookies work exactly like every other request in the app.</div>
+        <div class="mini"><b>Different origin</b>(e.g. a local Node-RED server on a different port) — use a plain <code>fetch()</code> designed to never trigger a CORS "preflight" the backend can't answer.</div>
+      </div>
+      <pre>const request = async (url, options = {}) => {
+  if (typeof apiCall === 'function' && !isCrossOrigin(url)) {
+    return apiCall(url, options);   <span class="c">// same-origin: use the ERP's helper</span>
+  }
+  return simpleFetch(url, options); <span class="c">// cross-origin: avoid a CORS preflight</span>
+};</pre>
+      <div class="why"><b>Why:</b> a browser sends a "preflight" (an
+         <code>OPTIONS</code> request) before certain cross-origin requests, to
+         ask the server for permission first. Some simple backends (like a bare
+         Node-RED flow) can't answer that. So for cross-origin calls we keep the
+         request in the browser's "simple request" category — plain text body,
+         no custom headers — which skips the preflight entirely.</div>
+    </div>
+
+    <!-- STEP 11 -->
+    <div class="step" id="s11" style="--tag:var(--async)">
+      <div class="step-head">
+        <div class="step-num">11</div>
+        <h2><code>async</code>/<code>await</code> + <code>try/catch/finally</code></h2>
+        <span class="tag">Networking</span>
+      </div>
+      <p>Every network call follows the exact same shape:</p>
+      <pre>const fetchAlerts = async () => {
+  state.isLoading = true;
+  renderLoading();                 <span class="c">// 1. show something immediately</span>
+
+  try {
+    const data = await request(url, { method: 'GET' });
+    state.alerts = data.alerts;
+    renderAlerts();                <span class="c">// 2. success</span>
+  } catch (err) {
+    renderError(err.message);      <span class="c">// 3. failure</span>
+  } finally {
+    state.isLoading = false;       <span class="c">// 4. ALWAYS runs, success or not</span>
+  }
+};</pre>
+      <div class="why"><b>Why <code>finally</code> matters:</b> without it, a
+         thrown error could leave <code>isLoading</code> stuck as
+         <code>true</code> forever, permanently disabling the UI. <code>finally</code>
+         guarantees the cleanup step runs no matter which path the code took.</div>
+    </div>
+
+    <!-- STEP 12 -->
+    <div class="step" id="s12" style="--tag:var(--js)">
+      <div class="step-head">
+        <div class="step-num">12</div>
+        <h2>Conditional UI: the "Other" text box</h2>
+        <span class="tag">JavaScript</span>
+      </div>
+      <p>This feature is just three small decisions, chained together:</p>
+      <div class="flow">
+        <span class="node">user clicks a button</span><span class="arrow">→</span>
+        <span class="node">is its label "Other"?</span><span class="arrow">→</span>
+        <span class="node">yes: reveal textbox</span>
+        <span class="arrow">/</span>
+        <span class="node">no: hide + clear it</span>
+      </div>
+      <pre>const isOtherAlert = (label, custom) =>
+  custom === true || label?.trim().toLowerCase() === 'other';
+
+if (isOtherAlert(state.selectedAlert, state.selectedIsCustom)) {
+  showOtherInput();   <span class="c">// reveal + focus the &lt;input&gt;</span>
+} else {
+  hideOtherInput();   <span class="c">// hide it AND clear its value</span>
+}</pre>
+      <p>Then, on Send, one more decision: <i>what text do we actually submit?</i></p>
+      <pre>let alertText = state.selectedAlert;             <span class="c">// default: the button's own label</span>
+if (isOtherAlert(state.selectedAlert, state.selectedIsCustom)) {
+  alertText = otherInput.value.trim();            <span class="c">// override: whatever they typed</span>
+  if (!alertText) { notify('Please enter a reason.'); return; } <span class="c">// guard</span>
+}</pre>
+      <div class="why"><b>Why hide-and-clear together:</b> if we only hid the box
+         without clearing it, picking "OIL STAIN" after previously typing
+         something in "Other" would leave that old text sitting in a hidden
+         input — invisible, but still there if the user went back to "Other".</div>
+    </div>
+
+    <!-- STEP 13 -->
+    <div class="step" id="s13" style="--tag:var(--async)">
+      <div class="step-head">
+        <div class="step-num">13</div>
+        <h2>Caching, and cancelling a request in flight</h2>
+        <span class="tag">Performance</span>
+      </div>
+      <p><b>Caching</b> — don't re-ask the server for the same list every time
+         the modal opens; remember when we last asked, and skip the network if
+         it was recent enough:</p>
+      <pre>const isFresh = (Date.now() - state.cacheTimestamp) < config.cacheDuration;
+if (isFresh) { renderAlerts(); return; }  <span class="c">// reuse what we already have</span></pre>
+      <p><b>Cancelling</b> — if the user opens, then quickly closes, the modal
+         while a request is still travelling to the server, we tell the browser
+         to abandon it, so it can't come back later and update DOM that no
+         longer exists:</p>
+      <pre>state.abortController = new AbortController();
+request(url, { signal: state.abortController.signal });
+
+<span class="c">// later, on close:</span>
+state.abortController.abort();  <span class="c">// the fetch above rejects immediately</span></pre>
+      <div class="why"><b>Why:</b> without this, a slow request that finishes
+         <i>after</i> the user already closed the modal could still try to
+         render into elements that are gone, or flash old data onto a screen
+         the user has moved away from.</div>
+    </div>
+
+    <!-- STEP 14 -->
+    <div class="step" id="s14" style="--tag:var(--js)">
+      <div class="step-head">
+        <div class="step-num">14</div>
+        <h2>Designing the public API</h2>
+        <span class="tag">API design</span>
+      </div>
+      <p>Everything the outside world can do to the widget is exactly four verbs:</p>
+      <div class="grid2">
+        <div class="mini"><b>SOS.init(options)</b>Wire the trigger button and store config. Refuses to run twice.</div>
+        <div class="mini"><b>SOS.open() / SOS.close()</b>Programmatic control, in case a page wants a keyboard shortcut.</div>
+        <div class="mini"><b>SOS.destroy()</b>Undo everything <code>init()</code> did — for single-page apps that mount/unmount views.</div>
+      </div>
+      <p>New features (like caching or the <code>debug</code> flag) were added as
+         <b>optional keys on the same object</b>, never as new required
+         arguments:</p>
+      <pre><span class="c">// old integration code — still works, unchanged:</span>
+SOS.init({ button: '#btnSOS', machineId: 'ST1' });
+
+<span class="c">// new capabilities are opt-in, added alongside:</span>
+SOS.init({ button: '#btnSOS', machineId: 'ST1', cacheDuration: 60000, debug: true });</pre>
+      <div class="why"><b>Why:</b> this is called being <b>backward compatible</b>.
+         Every page that integrated the widget on day one keeps working forever,
+         even as the library grows new features nobody asked for yet.</div>
+    </div>
+
+    <!-- STEP 15 -->
+    <div class="step" id="s15" style="--tag:var(--db)">
+      <div class="step-head">
+        <div class="step-num">15</div>
+        <h2>The backend: Node-RED + MySQL</h2>
+        <span class="tag">Backend</span>
+      </div>
+      <p>Node-RED lets you build an HTTP API by wiring together small visual
+         blocks instead of writing a server from scratch. Our two endpoints are
+         each a short chain of blocks:</p>
+      <div class="flow">
+        <span class="node">GET /sos-alerts</span><span class="arrow">→</span>
+        <span class="node">build SQL</span><span class="arrow">→</span>
+        <span class="node">run query</span><span class="arrow">→</span>
+        <span class="node">format JSON</span><span class="arrow">→</span>
+        <span class="node">respond</span>
+      </div>
+      <div class="flow">
+        <span class="node">POST /sos-alert</span><span class="arrow">→</span>
+        <span class="node">parse body</span><span class="arrow">→</span>
+        <span class="node">validate</span><span class="arrow">→</span>
+        <span class="node">insert (or 400)</span><span class="arrow">→</span>
+        <span class="node">respond</span>
+      </div>
+      <p>The query itself uses a <b>prepared statement</b> — placeholders
+         (<code>?</code>) instead of pasting the user's text directly into the
+         SQL string:</p>
+      <pre>msg.topic = "INSERT INTO sosalert_history (machineid, alert) VALUES (?, ?);";
+msg.payload = [machineid, alert];  <span class="c">// values are sent separately from the query</span></pre>
+      <div class="why"><b>Why placeholders matter:</b> if we instead wrote
+         <code>"...VALUES ('" + alert + "')"</code>, someone could type
+         <code>' ); DROP TABLE sosalert_history; --</code> into the "Other" box
+         and it would run as real SQL — a classic <b>SQL injection</b> attack.
+         Placeholders keep user text as pure data, never as code.</div>
+      <p>Finally, a <code>catch</code> node wraps the whole flow so a database
+         hiccup returns a clean <code>500</code> JSON error instead of leaving
+         the browser's request hanging forever with no answer at all.</p>
+    </div>
+
+  </div>
+
+  <footer>
+    That's the whole build, one concept at a time — HTML that builds itself,
+    CSS that themes itself, JavaScript that protects its own state, and a
+    backend that never trusts what it's handed.
+  </footer>
+
+</body>
+</html>

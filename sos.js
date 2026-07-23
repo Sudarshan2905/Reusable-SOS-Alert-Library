@@ -36,10 +36,10 @@ const SOS = (() => {
     apiBase: '/app',       // base path — GET {apiBase}/sos-alerts, POST {apiBase}/sos-alert
     getAlertsUrl: null,    // full override for the GET url
     postAlertUrl: null,    // full override for the POST url
-    cacheDuration: 300000, // NEW — ms to reuse a cached GET /sos-alerts response (default 5 min; 0 disables caching)
-    debug: false,          // NEW — when true, prints internal diagnostics via log()
-    onSuccess: null,       // NEW — optional (data) => {} called after a successful POST /sos-alert
-    onError: null,         // NEW — optional (err) => {} called after a failed GET or POST
+    cacheDuration: 300000, // ms to reuse a cached GET /sos-alerts response (default 5 min; 0 disables caching)
+    debug: false,          // when true, prints internal diagnostics via log()
+    onSuccess: null,       // optional (data) => {} called after a successful POST /sos-alert
+    onError: null,         // optional (err) => {} called after a failed GET or POST
   };
 
   let els = {
@@ -49,20 +49,21 @@ const SOS = (() => {
     grid: null,
     sendBtn: null,
     closeBtn: null,
-    otherWrapper: null, // NEW — wrapper around the free-text "Other" input
-    otherInput: null,   // NEW — the free-text "Other" input itself
-    otherCounter: null, // NEW (item 6) — "N / 150" live counter
+    otherWrapper: null, // wrapper around the free-text "Other" input
+    otherInput: null,   // the free-text "Other" input itself
+    otherCounter: null, // "N / 150" live counter
+    otherError: null,   // NEW — inline red error message under the input
   };
 
   let state = {
     alerts: [],
     selectedAlert: null,
-    selectedIsCustom: false, // NEW — companion flag for isOtherAlert()
+    selectedIsCustom: false, // companion flag for isOtherAlert()
     isLoading: false,
     isSending: false,
     initialized: false,
-    cacheTimestamp: 0,     // NEW — Date.now() of the last successful GET, for cacheDuration
-    abortController: null, // NEW — aborts an in-flight GET if the modal closes first
+    cacheTimestamp: 0,     // Date.now() of the last successful GET, for cacheDuration
+    abortController: null, // aborts an in-flight GET if the modal closes first
   };
 
   let lastFocusedEl = null;
@@ -85,13 +86,13 @@ const SOS = (() => {
       : config.machineId;
   };
 
-  /** NEW — gated debug logger. Silent unless SOS.init({ debug: true }) was set. */
+  /** Gated debug logger. Silent unless SOS.init({ debug: true }) was set. */
   const log = (...args) => {
     if (config.debug) console.log('[SOS]', ...args);
   };
 
   /**
-   * NEW — true if an alert entry requires the free-text "Other" flow.
+   * True if an alert entry requires the free-text "Other" flow.
    * Prefers explicit backend metadata ({ alert, custom: true }) over the
    * "Other" string so a customer can rename the label (e.g. "Others",
    * "Custom Reason") without breaking the free-text behavior. Falls
@@ -141,7 +142,7 @@ const SOS = (() => {
    */
   const simpleFetch = async (url, options = {}) => {
     const fetchOptions = { method: options.method || 'GET' };
-    if (options.signal) fetchOptions.signal = options.signal; // NEW (item 3)
+    if (options.signal) fetchOptions.signal = options.signal;
 
     if (options.body !== undefined) {
       fetchOptions.headers = { 'Content-Type': 'text/plain;charset=UTF-8' };
@@ -219,11 +220,11 @@ const SOS = (() => {
           </p>
           <div class="sos-grid" role="group" aria-label="Alert reasons"></div>
 
-          <!-- NEW: free-text reason for the "Other"/custom alert. Hidden
-               by default via .sos-other-hidden; only shown when an
+          <!-- Free-text reason for the "Other"/custom alert. Hidden by
+               default via .sos-other-hidden; only shown when an
                Other/custom button is selected (see showOtherInput()).
-               No IDs here beyond what ARIA requires (item 2) — the
-               input is found via scoped querySelector(). -->
+               No IDs beyond what ARIA requires — elements are found
+               via scoped querySelector(). -->
           <div class="sos-other-wrapper sos-other-hidden">
             <input
               type="text"
@@ -233,6 +234,10 @@ const SOS = (() => {
               aria-label="Custom alert reason"
               aria-describedby="sos-other-counter"
             />
+            <!-- NEW — inline red validation error, shown/hidden via
+                 showOtherError()/clearOtherError() in sendAlert() and
+                 on input. Empty by default. -->
+            <div class="sos-other-error" role="alert" aria-live="assertive"></div>
             <div class="sos-other-counter" id="sos-other-counter" aria-live="polite">0 / 150</div>
           </div>
         </div>
@@ -251,22 +256,23 @@ const SOS = (() => {
     els.grid = overlay.querySelector('.sos-grid');
     els.sendBtn = overlay.querySelector('.sos-send');
     els.closeBtn = overlay.querySelector('.sos-close');
-    els.otherWrapper = overlay.querySelector('.sos-other-wrapper'); // NEW — was ID-based
-    els.otherInput = overlay.querySelector('.sos-other-input');     // NEW — was ID-based
-    els.otherCounter = overlay.querySelector('.sos-other-counter'); // NEW (item 6)
+    els.otherWrapper = overlay.querySelector('.sos-other-wrapper');
+    els.otherInput = overlay.querySelector('.sos-other-input');
+    els.otherCounter = overlay.querySelector('.sos-other-counter');
+    els.otherError = overlay.querySelector('.sos-other-error'); // NEW
 
-    // NEW (item 15) — bound once here, for the lifetime of this DOM,
-    // instead of on every openModal()/closeModal() cycle. Safe because
-    // .sos-overlay is `visibility: hidden` (and thus unclickable /
-    // unfocusable) whenever it isn't `.sos-open`. Only the document-level
-    // keydown listener still binds/unbinds per open/close, since that one
-    // is global and must never fire while the modal is closed.
+    // Bound once here, for the lifetime of this DOM, instead of on
+    // every openModal()/closeModal() cycle. Safe because .sos-overlay
+    // is `visibility: hidden` (and thus unclickable/unfocusable)
+    // whenever it isn't `.sos-open`. Only the document-level keydown
+    // listener still binds/unbinds per open/close, since that one is
+    // global and must never fire while the modal is closed.
     els.grid.addEventListener('click', onGridClick);
     els.sendBtn.addEventListener('click', onSendClick);
     els.closeBtn.addEventListener('click', onCloseClick);
     els.overlay.addEventListener('click', onOverlayClick);
-    els.otherInput.addEventListener('input', updateOtherCounter);   // NEW (item 6)
-    els.otherInput.addEventListener('keydown', onOtherInputKeydown); // NEW (item 4)
+    els.otherInput.addEventListener('input', onOtherInputChange); // CHANGED — now also clears inline error
+    els.otherInput.addEventListener('keydown', onOtherInputKeydown);
   };
 
   const renderLoading = () => {
@@ -285,17 +291,17 @@ const SOS = (() => {
         <button type="button" class="sos-retry">Retry</button>
       </div>
     `;
-    const retryBtn = els.grid.querySelector('.sos-retry'); // NEW (item 2) — scoped, no global ID lookup
+    const retryBtn = els.grid.querySelector('.sos-retry'); // scoped, no global ID lookup
     if (retryBtn) {
-      retryBtn.addEventListener('click', () => fetchAlerts(true)); // NEW — force bypasses the cache
+      retryBtn.addEventListener('click', () => fetchAlerts(true)); // force bypasses the cache
     }
   };
 
   /**
-   * NEW — guarantees a client-side "Other" option always exists,
-   * regardless of what the backend's alert list contains. The free-text
-   * flow shouldn't depend on someone remembering to seed an "Other" row
-   * in the sosalerts table — that would make the feature silently
+   * Guarantees a client-side "Other" option always exists, regardless
+   * of what the backend's alert list contains. The free-text flow
+   * shouldn't depend on someone remembering to seed an "Other" row in
+   * the sosalerts table — that would make the feature silently
    * disappear for any customer/table that doesn't have it.
    * No-ops if the API already returned its own "Other" entry (avoids
    * a duplicate button).
@@ -321,7 +327,7 @@ const SOS = (() => {
         <span>No alert reasons are available right now.</span>
       </div>
     `;
-    appendOtherButtonIfMissing(); // NEW — still let the user report something via free text
+    appendOtherButtonIfMissing(); // still let the user report something via free text
   };
 
   const renderAlerts = () => {
@@ -338,13 +344,13 @@ const SOS = (() => {
         : '';
       if (!label.trim()) return;
 
-      const isCustom = !!(item && item.custom === true); // NEW — explicit backend metadata
+      const isCustom = !!(item && item.custom === true); // explicit backend metadata
 
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sos-alert';
       btn.dataset.alert = label;
-      if (isCustom) btn.dataset.custom = 'true'; // NEW
+      if (isCustom) btn.dataset.custom = 'true';
       btn.textContent = label;
       btn.setAttribute('role', 'button');
       btn.setAttribute('aria-pressed', 'false');
@@ -359,36 +365,72 @@ const SOS = (() => {
       els.grid.appendChild(btn);
     });
 
-    appendOtherButtonIfMissing(); // NEW — guarantee "Other" is always present
+    appendOtherButtonIfMissing(); // guarantee "Other" is always present
   };
 
   // ==========================================================
   // ACTIONS
   // ==========================================================
 
-  /** NEW — reveals the free-text "Other" input and focuses it. */
+  /** Reveals the free-text "Other" input and focuses it. */
   const showOtherInput = () => {
     if (!els.otherWrapper) return;
     els.otherWrapper.classList.remove('sos-other-hidden');
-    updateOtherCounter(); // NEW (item 6)
+    clearOtherError(); // NEW — never show a stale error from a previous selection
+    updateOtherCounter();
     setTimeout(() => els.otherInput && els.otherInput.focus(), 50);
   };
 
-  /** NEW — hides the free-text "Other" input and clears its value. */
+  /** Hides the free-text "Other" input and clears its value. */
   const hideOtherInput = () => {
     if (!els.otherWrapper) return;
     els.otherWrapper.classList.add('sos-other-hidden');
     if (els.otherInput) els.otherInput.value = '';
-    updateOtherCounter(); // NEW (item 6)
+    clearOtherError(); // NEW
+    updateOtherCounter();
   };
 
-  /** NEW (item 6) — refreshes the "N / 150" live counter under the Other input. */
+  /** Refreshes the "N / 150" live counter under the Other input. */
   const updateOtherCounter = () => {
     if (!els.otherCounter || !els.otherInput) return;
     els.otherCounter.textContent = `${els.otherInput.value.length} / 150`;
   };
 
-  /** NEW (item 4) — Enter submits from the Other input; Tab order is untouched. */
+  /**
+   * NEW — shows an inline red error message directly under the Other
+   * input (mirrors the CopperCloud .field-error pattern) and marks
+   * the wrapper invalid so the input border/focus ring turn red too.
+   * @param {string} message
+   */
+  const showOtherError = (message) => {
+    if (!els.otherError || !els.otherWrapper) return;
+    els.otherError.textContent = message;
+    els.otherError.classList.add('sos-other-error--visible');
+    els.otherWrapper.classList.add('sos-other-wrapper--invalid');
+  };
+
+  /** NEW — clears the inline error and the invalid state. */
+  const clearOtherError = () => {
+    if (!els.otherError || !els.otherWrapper) return;
+    els.otherError.textContent = '';
+    els.otherError.classList.remove('sos-other-error--visible');
+    els.otherWrapper.classList.remove('sos-other-wrapper--invalid');
+  };
+
+  /**
+   * NEW — fires on every keystroke in the Other input. Updates the
+   * character counter and clears any visible inline error as soon as
+   * the person starts fixing it, so the error doesn't linger stale
+   * once they've corrected the value.
+   */
+  const onOtherInputChange = () => {
+    updateOtherCounter();
+    if (els.otherError && els.otherError.classList.contains('sos-other-error--visible')) {
+      clearOtherError();
+    }
+  };
+
+  /** Enter submits from the Other input; Tab order is untouched. */
   const onOtherInputKeydown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -397,13 +439,13 @@ const SOS = (() => {
   };
 
   /**
-   * @param {boolean} [force=false] - NEW (item 7) — bypasses the cache
-   *   (used by the Retry button so a manual retry never serves stale data).
+   * @param {boolean} [force=false] - bypasses the cache (used by the
+   *   Retry button so a manual retry never serves stale data).
    */
   const fetchAlerts = async (force = false) => {
-    // NEW (item 7) — serve from cache when it's still fresh; skips the
-    // network call entirely but still re-renders (handles a re-open
-    // right after a previous close).
+    // Serve from cache when it's still fresh; skips the network call
+    // entirely but still re-renders (handles a re-open right after a
+    // previous close).
     const isCacheFresh = config.cacheDuration > 0
       && state.alerts.length > 0
       && (Date.now() - state.cacheTimestamp) < config.cacheDuration;
@@ -417,12 +459,12 @@ const SOS = (() => {
     state.isLoading = true;
     state.selectedAlert = null;
     state.selectedIsCustom = false;
-    hideOtherInput(); // NEW — fresh fetch means no reason is selected yet
+    hideOtherInput(); // fresh fetch means no reason is selected yet
     updateSendButton();
     renderLoading();
 
-    // NEW (item 3) — abort a still-in-flight request from a previous
-    // open before starting a new one / if the modal closes mid-request.
+    // Abort a still-in-flight request from a previous open before
+    // starting a new one / if the modal closes mid-request.
     if (state.abortController) state.abortController.abort();
     state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
 
@@ -439,18 +481,18 @@ const SOS = (() => {
       }
 
       state.alerts = data.alerts;
-      state.cacheTimestamp = Date.now(); // NEW (item 7)
+      state.cacheTimestamp = Date.now();
       renderAlerts();
     } catch (err) {
-      // NEW (item 3) — a deliberate abort is not a real failure; the
-      // modal is either closing or a newer fetch has already taken over.
+      // A deliberate abort is not a real failure; the modal is either
+      // closing or a newer fetch has already taken over.
       if (err && err.name === 'AbortError') return;
 
       state.alerts = [];
       state.cacheTimestamp = 0;
       const message = err && err.message ? err.message : 'Failed to load alerts.';
       renderError(message);
-      if (typeof config.onError === 'function') config.onError(err); // NEW (item 13)
+      if (typeof config.onError === 'function') config.onError(err);
     } finally {
       state.isLoading = false;
     }
@@ -467,9 +509,9 @@ const SOS = (() => {
     btnEl.classList.add('sos-selected');
     btnEl.setAttribute('aria-pressed', 'true');
     state.selectedAlert = btnEl.dataset.alert;
-    state.selectedIsCustom = btnEl.dataset.custom === 'true'; // NEW
+    state.selectedIsCustom = btnEl.dataset.custom === 'true';
 
-    // NEW — show the free-text box only for "Other"/custom reasons;
+    // Show the free-text box only for "Other"/custom reasons;
     // otherwise make sure it's hidden and cleared so a predefined
     // alert sends as-is.
     if (isOtherAlert(state.selectedAlert, state.selectedIsCustom)) {
@@ -490,25 +532,41 @@ const SOS = (() => {
   const sendAlert = async () => {
     if (!state.selectedAlert || state.isSending) return;
 
-    // NEW (item 8) — validate machine before ever hitting the network.
+    // Validate machine before ever hitting the network.
     const machineId = resolveMachineId();
     if (!machineId || !String(machineId).trim()) {
       notify('No machine selected. Please select a machine first.', 'error', 6000);
       return;
     }
 
-    // for "Other"/custom, the payload's alert text is whatever the user
-    // typed (trimmed + length-capped as a client-side safety net —
-    // maxlength=150 already enforces this in the UI); predefined
+    // For "Other"/custom, the payload's alert text is whatever the
+    // user typed (trimmed + length-capped as a client-side safety net
+    // — maxlength=150 already enforces this in the UI); predefined
     // alerts are untouched and behave exactly as before.
     let alertText = state.selectedAlert;
     if (isOtherAlert(state.selectedAlert, state.selectedIsCustom)) {
-      const typed = ((els.otherInput && els.otherInput.value) || '').trim().slice(0, 150); // NEW — .slice() safety net
+      const typed = ((els.otherInput && els.otherInput.value) || '').trim().slice(0, 150);
+
+      // CHANGED — both validation failures now show inline under the
+      // input (red text, matching CopperCloud's .field-error look)
+      // instead of a toast, so the person sees exactly which field is
+      // wrong without it competing with earlier/stacked toasts.
       if (!typed) {
-        notify('Please enter the alert reason.', 'error', 5000);
+        showOtherError('Please enter the alert reason.');
         els.otherInput && els.otherInput.focus();
         return;
       }
+
+      // Mirrors the backend's minLen: 2 rule (Set Schema - SOS Alert
+      // node) so a 1-character reason is caught instantly, client-side,
+      // instead of round-tripping to the API just to get rejected.
+      if (typed.length < 2) {
+        showOtherError('Alert reason must be at least 2 characters.');
+        els.otherInput && els.otherInput.focus();
+        return;
+      }
+
+      clearOtherError(); // NEW — passed validation, make sure nothing stale lingers
       alertText = typed;
     }
 
@@ -516,12 +574,12 @@ const SOS = (() => {
     updateSendButton();
 
     const originalHtml = els.sendBtn.innerHTML;
-    // NEW (item 5) — lightweight inline spinner instead of plain text, no external libs.
+    // Lightweight inline spinner instead of plain text, no external libs.
     els.sendBtn.innerHTML = '<span class="sos-send-spinner" aria-hidden="true"></span> Sending\u2026';
 
     const url = config.postAlertUrl || `${config.apiBase}/sos-alert`;
     const payload = { machineid: machineId, alert: alertText };
-    log('sending alert', payload); // NEW (item 12) — silent unless debug: true
+    log('sending alert', payload); // silent unless debug: true
 
     try {
       const data = await request(url, { method: 'POST', body: payload });
@@ -531,11 +589,18 @@ const SOS = (() => {
       }
 
       notify(data.message || 'SOS Alert Sent Successfully', 'success', 4000);
-      if (typeof config.onSuccess === 'function') config.onSuccess(data); // NEW (item 13)
+      if (typeof config.onSuccess === 'function') config.onSuccess(data);
       closeModal();
     } catch (err) {
+      // NEW — if the backend still rejects the alert text (e.g. a
+      // future stricter server-side rule), surface that inline under
+      // the Other input too, rather than only as a toast, so the
+      // error stays visible right next to the field that caused it.
+      if (isOtherAlert(state.selectedAlert, state.selectedIsCustom)) {
+        showOtherError(err && err.message ? err.message : 'Failed to send alert. Please try again.');
+      }
       notify(err && err.message ? err.message : 'Failed to send alert. Please try again.', 'error', 7000);
-      if (typeof config.onError === 'function') config.onError(err); // NEW (item 13)
+      if (typeof config.onError === 'function') config.onError(err);
     } finally {
       state.isSending = false;
       els.sendBtn.innerHTML = originalHtml;
@@ -572,12 +637,12 @@ const SOS = (() => {
 
     unbindModalEvents();
 
-    if (state.abortController) state.abortController.abort(); // NEW (item 3)
+    if (state.abortController) state.abortController.abort();
 
     state.selectedAlert = null;
-    state.selectedIsCustom = false; // NEW
+    state.selectedIsCustom = false;
     state.alerts = [];
-    hideOtherInput(); // NEW — clear/hide the free-text box on close
+    hideOtherInput(); // clear/hide the free-text box (and its error) on close
 
     if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
       lastFocusedEl.focus();
@@ -611,7 +676,7 @@ const SOS = (() => {
 
     // Basic focus trap
     if (e.key === 'Tab') {
-      // NEW — 'input:not([disabled])' added so the "Other" text box
+      // 'input:not([disabled])' included so the "Other" text box
       // participates in the Tab/Shift+Tab loop like every other control.
       const focusable = els.modal.querySelectorAll(
         'button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled])'
@@ -631,9 +696,9 @@ const SOS = (() => {
     }
   };
 
-  // NEW (item 15) — only the document-level listener still binds/unbinds
-  // per open/close; it's the one listener that truly must not fire while
-  // the modal is closed. Renamed for clarity now that it does less.
+  // Only the document-level listener still binds/unbinds per
+  // open/close; it's the one listener that truly must not fire while
+  // the modal is closed.
   const bindModalEvents = () => {
     document.addEventListener('keydown', onKeydown);
   };
@@ -664,10 +729,10 @@ const SOS = (() => {
    * @param {string} [options.apiBase='/app'] - Base path for the SOS endpoints.
    * @param {string} [options.getAlertsUrl] - Full override for the GET alerts URL.
    * @param {string} [options.postAlertUrl] - Full override for the POST alert URL.
-   * @param {number} [options.cacheDuration=300000] - NEW — ms to reuse a cached alerts list (0 disables caching).
-   * @param {boolean} [options.debug=false] - NEW — logs internal diagnostics to the console when true.
-   * @param {Function} [options.onSuccess] - NEW — (data) => {} called after a successful POST /sos-alert.
-   * @param {Function} [options.onError] - NEW — (err) => {} called after a failed GET or POST.
+   * @param {number} [options.cacheDuration=300000] - ms to reuse a cached alerts list (0 disables caching).
+   * @param {boolean} [options.debug=false] - logs internal diagnostics to the console when true.
+   * @param {Function} [options.onSuccess] - (data) => {} called after a successful POST /sos-alert.
+   * @param {Function} [options.onError] - (err) => {} called after a failed GET or POST.
    */
   const init = (options = {}) => {
     if (state.initialized) {
@@ -697,7 +762,7 @@ const SOS = (() => {
   const destroy = () => {
     unbindTrigger();
 
-    if (state.abortController) state.abortController.abort(); // NEW (item 3)
+    if (state.abortController) state.abortController.abort();
 
     if (els.overlay) {
       unbindModalEvents();
@@ -708,7 +773,7 @@ const SOS = (() => {
 
     els = {
       triggerBtn: null, overlay: null, modal: null, grid: null, sendBtn: null, closeBtn: null,
-      otherWrapper: null, otherInput: null, otherCounter: null, // NEW
+      otherWrapper: null, otherInput: null, otherCounter: null, otherError: null,
     };
     state = {
       alerts: [], selectedAlert: null, selectedIsCustom: false, isLoading: false,

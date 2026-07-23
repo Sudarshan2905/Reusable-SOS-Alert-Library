@@ -35,9 +35,9 @@
   --sos-border-width: var(--border-width-default, 1px);
   --sos-border-style: var(--border-style-default, solid);
   --sos-border-color: var(--c-border, #f5f5f550);
-  /* NEW (item 9) — composite shorthand for the common width+style+color
-     case, so callers don't repeat all three every time. Use directly
-     only where the color is --sos-border-color; anywhere a different
+  /* composite shorthand for the common width+style+color case, so
+     callers don't repeat all three every time. Use directly only
+     where the color is --sos-border-color; anywhere a different
      border color is needed (e.g. --sos-red, --form-border) still
      compose the three parts explicitly. */
   --sos-border: var(--sos-border-width) var(--sos-border-style) var(--sos-border-color);
@@ -101,7 +101,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: var(--page-padding, 20px);
   background: var(--sos-backdrop);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -205,8 +205,8 @@
 .sos-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: var(--btn-group-gap, 10px);
+   margin-bottom: var(--section-gap, 20px);
 }
 
 @media screen and (max-width: 900px) {
@@ -273,7 +273,7 @@
 }
 
 /* ============================================================
-   "OTHER" FREE-TEXT REASON — NEW
+   "OTHER" FREE-TEXT REASON
    Hidden by default; revealed only when the "Other" alert
    button is selected. Reuses the same CopperCloud form tokens
    (--form-*) that the ERP's own .inp class uses, so it matches
@@ -281,7 +281,7 @@
    needed since it's already 100% width within .sos-body.
    ============================================================ */
 .sos-other-wrapper {
-  margin: 0 0 20px;
+  margin: 0 0 var(--section-gap, 20px);
 }
 
 .sos-other-input {
@@ -321,7 +321,36 @@
   display: none;
 }
 
-/* NEW (item 6) — live "N / 150" counter under the Other input. */
+/* Inline validation error shown directly under the Other input,
+   mirroring the CopperCloud .field-error convention (same
+   --form-error red token) since this library doesn't use the
+   host page's .field wrapper. Hidden by default; toggled via
+   .sos-other-error--visible in sos.js. */
+.sos-other-error {
+  display: none;
+  margin: 6px 2px 0;
+  color: var(--form-error, #FF6B6B);
+  font-size: var(--fs-small, 13px);
+  font-family: var(--sos-font);
+  line-height: 1.4;
+}
+
+.sos-other-error.sos-other-error--visible {
+  display: block;
+}
+
+/* When the error is visible, swap the input border/focus ring to
+   the error color too — same visual pattern as invalid .field
+   states elsewhere in the design system. */
+.sos-other-wrapper.sos-other-wrapper--invalid .sos-other-input {
+  border-color: var(--form-error, #FF6B6B);
+}
+
+.sos-other-wrapper.sos-other-wrapper--invalid .sos-other-input:focus {
+  box-shadow: var(--form-ring-size, 0 0 0 3px) rgba(255, 107, 107, 0.15);
+}
+
+/* "N / 150" live counter under the Other input. */
 .sos-other-counter {
   margin: 6px 2px 0;
   text-align: right;
@@ -416,8 +445,8 @@
   pointer-events: none;
 }
 
-/* NEW (item 5) — lightweight inline spinner shown inside .sos-send
-   while sending; reuses the same spin keyframes as .sos-spinner. */
+/* Lightweight inline spinner shown inside .sos-send while sending;
+   reuses the same spin keyframes as .sos-spinner. */
 .sos-send-spinner {
   display: inline-block;
   width: 13px;
@@ -425,7 +454,7 @@
   vertical-align: -2px;
   margin-right: 6px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.35);
+  border: var(--border-width-thick, 2px) var(--border-style-default, solid) rgba(255, 255, 255, 0.35);
   border-top-color: var(--sos-text);
   animation: sos-spin 0.7s linear infinite;
 }
