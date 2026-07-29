@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -53,7 +54,7 @@
       width: 100%;
       padding: 12px 14px;
       background: var(--form-surface, #141414);
-      border: var(--border-width-default, 1px) var(--border-style-default, solid) var(--form-border, rgba(239,128,28,0.25));
+      border: var(--border-width-default, 1px) var(--border-style-default, solid) var(--form-border, rgba(239, 128, 28, 0.25));
       border-radius: var(--form-radius, 14px);
       color: var(--c-light, #fff);
       font-family: inherit;
@@ -68,24 +69,13 @@
     }
   </style>
 </head>
+
 <body style="background: var(--bg-page, #171717); margin:0; min-height:100vh;">
 
   <div class="demo-wrap">
     <div class="demo-title">SOS Library — Integration Demo</div>
-    <div class="demo-subtitle">
-      Select a machine, then click the SOS button. Everything else
-      (popup, alerts, submission) is handled automatically by sos.js.
-    </div>
 
-    <div class="demo-field">
-      <label for="demo-machine-select">Machine</label>
-      <select id="demo-machine-select">
-        <option value="ST1">ST1</option>
-        <option value="ST2">ST2</option>
-        <option value="ST3">ST3</option>
-        <option value="LM1">LM1</option>
-      </select>
-    </div>
+
 
     <div class="demo-trigger-row">
       <button id="btnSOS" class="sos-trigger" type="button">SOS</button>
@@ -108,15 +98,18 @@
   <script>
     // Page-specific wiring only — no popup HTML, no SOS internals here.
     document.addEventListener('DOMContentLoaded', () => {
-      const machineSelect = document.getElementById('demo-machine-select');
 
       SOS.init({
-        button: '#btnSOS',
-        machineId: () => machineSelect.value,   // always reads the currently selected machine
-        apiBase: 'http://127.0.0.1:1880'                          // GET /app/sos-alerts, POST /app/sos-alert
+        button: "#btnSOS",
+        apiBase: "http://127.0.0.1:1880",
+        context: {
+          machine: "ST-1",
+          operation: "Printing"
+        }
       });
     });
   </script>
 
 </body>
+
 </html>

@@ -12,7 +12,7 @@
    Usage:
      <button id="btnSOS">SOS</button>
      <script>
-       SOS.init({ button: '#btnSOS', machineId: 'ST1' });
+       SOS.init({ button: '#btnSOS' });
      </script>
 
    Exposes exactly one global: window.SOS
@@ -32,8 +32,8 @@ const SOS = (() => {
   // ==========================================================
   let config = {
     button: null,          // CSS selector or Element
-    machineId: '',         // string or () => string
     apiBase: '/app',       // base path — GET {apiBase}/sos-alerts, POST {apiBase}/sos-alert
+    context: {},
     getAlertsUrl: null,    // full override for the GET url
     postAlertUrl: null,    // full override for the POST url
     cacheDuration: 300000, // ms to reuse a cached GET /sos-alerts response (default 5 min; 0 disables caching)
@@ -57,6 +57,7 @@ const SOS = (() => {
 
   let state = {
     alerts: [],
+    selectedRecId: null,
     selectedAlert: null,
     selectedIsCustom: false, // companion flag for isOtherAlert()
     isLoading: false,
@@ -77,13 +78,6 @@ const SOS = (() => {
     const div = document.createElement('div');
     div.textContent = String(str ?? '');
     return div.innerHTML;
-  };
-
-  /** Resolves the current machine id — supports a static value or a function. */
-  const resolveMachineId = () => {
-    return typeof config.machineId === 'function'
-      ? config.machineId()
-      : config.machineId;
   };
 
   /** Gated debug logger. Silent unless SOS.init({ debug: true }) was set. */
@@ -350,6 +344,7 @@ const SOS = (() => {
       btn.type = 'button';
       btn.className = 'sos-alert';
       btn.dataset.alert = label;
+      btn.dataset.recid = item.recid;
       if (isCustom) btn.dataset.custom = 'true';
       btn.textContent = label;
       btn.setAttribute('role', 'button');
@@ -509,6 +504,7 @@ const SOS = (() => {
     btnEl.classList.add('sos-selected');
     btnEl.setAttribute('aria-pressed', 'true');
     state.selectedAlert = btnEl.dataset.alert;
+    state.selectedRecId = btnEl.dataset.recid || null;
     state.selectedIsCustom = btnEl.dataset.custom === 'true';
 
     // Show the free-text box only for "Other"/custom reasons;
@@ -529,15 +525,40 @@ const SOS = (() => {
     els.sendBtn.setAttribute('aria-disabled', String(!enabled));
   };
 
+  const buildAlertText = (alertText) => {
+
+    const values = [];
+
+    if (
+      config.context &&
+      typeof config.context === "object"
+    ) {
+
+      Object.values(config.context).forEach(value => {
+
+        if (
+          value !== null &&
+          value !== undefined &&
+          String(value).trim() !== ""
+        ) {
+          values.push(String(value));
+        }
+
+      });
+
+    }
+
+    if (values.length === 0)
+      return alertText;
+
+    return `${alertText}, ${values.join(", ")}`;
+
+  };
+
   const sendAlert = async () => {
     if (!state.selectedAlert || state.isSending) return;
 
-    // Validate machine before ever hitting the network.
-    const machineId = resolveMachineId();
-    if (!machineId || !String(machineId).trim()) {
-      notify('No machine selected. Please select a machine first.', 'error', 6000);
-      return;
-    }
+
 
     // For "Other"/custom, the payload's alert text is whatever the
     // user typed (trimmed + length-capped as a client-side safety net
@@ -578,7 +599,10 @@ const SOS = (() => {
     els.sendBtn.innerHTML = '<span class="sos-send-spinner" aria-hidden="true"></span> Sending\u2026';
 
     const url = config.postAlertUrl || `${config.apiBase}/sos-alert`;
-    const payload = { machineid: machineId, alert: alertText };
+    const payload = {
+      source_recid: state.selectedRecId,
+      alert: buildAlertText(alertText)
+    };
     log('sending alert', payload); // silent unless debug: true
 
     try {
@@ -640,6 +664,7 @@ const SOS = (() => {
     if (state.abortController) state.abortController.abort();
 
     state.selectedAlert = null;
+    state.selectedRecId = null;
     state.selectedIsCustom = false;
     state.alerts = [];
     hideOtherInput(); // clear/hide the free-text box (and its error) on close
@@ -725,8 +750,8 @@ const SOS = (() => {
    * Initialises the SOS widget.
    * @param {Object} options
    * @param {string|HTMLElement} options.button - Selector or element for the trigger button.
-   * @param {string|Function} [options.machineId=''] - Static id or a function returning the current id.
    * @param {string} [options.apiBase='/app'] - Base path for the SOS endpoints.
+   * @param {Object} [options.context={}] - Additional page context to append to the alert.
    * @param {string} [options.getAlertsUrl] - Full override for the GET alerts URL.
    * @param {string} [options.postAlertUrl] - Full override for the POST alert URL.
    * @param {number} [options.cacheDuration=300000] - ms to reuse a cached alerts list (0 disables caching).
@@ -776,11 +801,11 @@ const SOS = (() => {
       otherWrapper: null, otherInput: null, otherCounter: null, otherError: null,
     };
     state = {
-      alerts: [], selectedAlert: null, selectedIsCustom: false, isLoading: false,
+      alerts: [], selectedAlert: null, selectedRecId: null, selectedIsCustom: false, isLoading: false,
       isSending: false, initialized: false, cacheTimestamp: 0, abortController: null,
     };
     config = {
-      button: null, machineId: '', apiBase: '/app', getAlertsUrl: null, postAlertUrl: null,
+      button: null, apiBase: '/app', context: {}, getAlertsUrl: null, postAlertUrl: null,
       cacheDuration: 300000, debug: false, onSuccess: null, onError: null,
     };
   };
