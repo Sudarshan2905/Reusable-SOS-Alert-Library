@@ -46,6 +46,8 @@ const SOS = (() => {
     triggerBtn: null,
     overlay: null,
     modal: null,
+    categorySelect: null,   // NEW
+    gridHint: null,         // NEW
     grid: null,
     sendBtn: null,
     closeBtn: null,
@@ -57,13 +59,18 @@ const SOS = (() => {
 
   let state = {
     alerts: [],
+    categories: [],                 // NEW
+    selectedCategory: '',           // NEW
+    isLoadingCategories: false,     // NEW
+    categoriesCacheTimestamp: 0,    // NEW — separate from alert cache
+    alertsCache: {},                // NEW — { [category]: { data, timestamp } } so Safety never serves Maintenance
     selectedRecId: null,
     selectedAlert: null,
     selectedIsCustom: false, // companion flag for isOtherAlert()
     isLoading: false,
     isSending: false,
     initialized: false,
-    cacheTimestamp: 0,     // Date.now() of the last successful GET, for cacheDuration
+  
     abortController: null, // aborts an in-flight GET if the modal closes first
   };
 
@@ -195,7 +202,8 @@ const SOS = (() => {
   // ==========================================================
   // DOM CREATION — no popup HTML ever lives on the page itself
   // ==========================================================
-
+  // ── createModal() — MODIFIED markup: category select + grid hint added
+  //    above .sos-grid. Everything else in the template is unchanged. ──
   const createModal = () => {
     const overlay = document.createElement('div');
     overlay.className = 'sos-overlay';
@@ -210,15 +218,21 @@ const SOS = (() => {
         <div class="sos-body">
           <p class="sos-label">
             <span class="sos-label-icon">&#9889;</span>
-            Select Alert Reason
+            Select Alert Category
           </p>
-          <div class="sos-grid" role="group" aria-label="Alert reasons"></div>
 
-          <!-- Free-text reason for the "Other"/custom alert. Hidden by
-               default via .sos-other-hidden; only shown when an
-               Other/custom button is selected (see showOtherInput()).
-               No IDs beyond what ARIA requires — elements are found
-               via scoped querySelector(). -->
+          <!-- NEW — category dropdown, populated from GET /sos-alerts -->
+          <div class="sos-category-wrapper">
+            <select class="sos-category-select" aria-label="Alert category">
+              <option value="">Select category</option>
+            </select>
+          </div>
+
+          <!-- NEW — shown instead of the grid until a category is chosen -->
+          <div class="sos-grid-hint">Select a category to view alert reasons.</div>
+
+          <div class="sos-grid sos-grid-hidden" role="group" aria-label="Alert reasons"></div>
+
           <div class="sos-other-wrapper sos-other-hidden">
             <input
               type="text"
@@ -228,9 +242,6 @@ const SOS = (() => {
               aria-label="Custom alert reason"
               aria-describedby="sos-other-counter"
             />
-            <!-- NEW — inline red validation error, shown/hidden via
-                 showOtherError()/clearOtherError() in sendAlert() and
-                 on input. Empty by default. -->
             <div class="sos-other-error" role="alert" aria-live="assertive"></div>
             <div class="sos-other-counter" id="sos-other-counter" aria-live="polite">0 / 150</div>
           </div>
@@ -247,27 +258,200 @@ const SOS = (() => {
 
     els.overlay = overlay;
     els.modal = overlay.querySelector('.sos-modal');
+    els.categorySelect = overlay.querySelector('.sos-category-select'); // NEW
+    els.gridHint = overlay.querySelector('.sos-grid-hint');             // NEW
     els.grid = overlay.querySelector('.sos-grid');
     els.sendBtn = overlay.querySelector('.sos-send');
     els.closeBtn = overlay.querySelector('.sos-close');
     els.otherWrapper = overlay.querySelector('.sos-other-wrapper');
     els.otherInput = overlay.querySelector('.sos-other-input');
     els.otherCounter = overlay.querySelector('.sos-other-counter');
-    els.otherError = overlay.querySelector('.sos-other-error'); // NEW
+    els.otherError = overlay.querySelector('.sos-other-error');
 
-    // Bound once here, for the lifetime of this DOM, instead of on
-    // every openModal()/closeModal() cycle. Safe because .sos-overlay
-    // is `visibility: hidden` (and thus unclickable/unfocusable)
-    // whenever it isn't `.sos-open`. Only the document-level keydown
-    // listener still binds/unbinds per open/close, since that one is
-    // global and must never fire while the modal is closed.
+    els.categorySelect.addEventListener('change', onCategoryChange); // NEW
     els.grid.addEventListener('click', onGridClick);
     els.sendBtn.addEventListener('click', onSendClick);
     els.closeBtn.addEventListener('click', onCloseClick);
     els.overlay.addEventListener('click', onOverlayClick);
-    els.otherInput.addEventListener('input', onOtherInputChange); // CHANGED — now also clears inline error
+    els.otherInput.addEventListener('input', onOtherInputChange);
     els.otherInput.addEventListener('keydown', onOtherInputKeydown);
   };
+
+    // ── NEW — category dropdown change handler ──
+  const onCategoryChange = (e) => {
+    const category = e.target.value;
+    state.selectedCategory = category;
+
+    // Reset alert selection on every category change
+    state.selectedAlert = null;
+    state.selectedRecId = null;
+    state.selectedIsCustom = false;
+    hideOtherInput();
+    updateSendButton();
+
+    if (!category) {
+      state.alerts = [];
+      els.grid.innerHTML = '';
+      showGridHint('Select a category to view alert reasons.');
+      return;
+    }
+
+    fetchAlertsForCategory(category);
+  };
+
+  // ── NEW — grid hint helpers ──
+  const showGridHint = (message) => {
+    if (els.gridHint) {
+      els.gridHint.textContent = message;
+      els.gridHint.classList.remove('sos-grid-hint-hidden');
+    }
+    if (els.grid) els.grid.classList.add('sos-grid-hidden');
+  };
+
+  const hideGridHint = () => {
+    if (els.gridHint) els.gridHint.classList.add('sos-grid-hint-hidden');
+    if (els.grid) els.grid.classList.remove('sos-grid-hidden');
+  };
+
+    // ── NEW — populate the category <select> from backend data ──
+  const renderCategories = () => {
+    if (!els.categorySelect) return;
+    const current = els.categorySelect.value;
+
+    els.categorySelect.innerHTML = '<option value="">Select category</option>';
+
+    state.categories.forEach((item) => {
+      const label = (item && item.category !== undefined && item.category !== null)
+        ? String(item.category)
+        : '';
+      if (!label.trim()) return;
+
+      const opt = document.createElement('option');
+      opt.value = label;
+      opt.textContent = label; // textContent — no innerHTML, no injection risk
+      els.categorySelect.appendChild(opt);
+    });
+
+    // Preserve selection across a re-render (e.g. Retry) if it still exists
+    if (current && Array.from(els.categorySelect.options).some((o) => o.value === current)) {
+      els.categorySelect.value = current;
+    }
+  };
+
+  const renderCategoryError = (message) => {
+    showGridHint(''); // clear hint text, error goes in grid area instead
+    els.grid.classList.remove('sos-grid-hidden');
+    els.grid.innerHTML = `
+      <div class="sos-state" style="grid-column: 1 / -1;" role="alert">
+        <span>${escapeHtml(message || 'Unable to load categories.')}</span>
+        <button type="button" class="sos-retry">Retry</button>
+      </div>
+    `;
+    const retryBtn = els.grid.querySelector('.sos-retry');
+    if (retryBtn) retryBtn.addEventListener('click', () => fetchCategories(true));
+  };
+
+    // ── NEW — GET /sos-alerts (no category) ──
+  const fetchCategories = async (force = false) => {
+    const isCacheFresh = config.cacheDuration > 0
+      && state.categories.length > 0
+      && (Date.now() - state.categoriesCacheTimestamp) < config.cacheDuration;
+
+    if (!force && isCacheFresh) {
+      log('serving categories from cache');
+      renderCategories();
+      showGridHint('Select a category to view alert reasons.');
+      return;
+    }
+
+    state.isLoadingCategories = true;
+    showGridHint('Loading categories…');
+
+    if (state.abortController) state.abortController.abort();
+    state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+    const url = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
+
+    try {
+      const data = await request(url, {
+        method: 'GET',
+        signal: state.abortController ? state.abortController.signal : undefined,
+      });
+
+      if (!data || data.success !== true || !Array.isArray(data.categories)) {
+        throw new Error('Unexpected response format from the categories API.');
+      }
+
+      state.categories = data.categories;
+      state.categoriesCacheTimestamp = Date.now();
+      renderCategories();
+      showGridHint('Select a category to view alert reasons.');
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      state.categories = [];
+      state.categoriesCacheTimestamp = 0;
+      renderCategoryError(err && err.message ? err.message : 'Failed to load categories.');
+      if (typeof config.onError === 'function') config.onError(err);
+    } finally {
+      state.isLoadingCategories = false;
+    }
+  };
+
+    // ── MODIFIED — fetchAlerts() renamed/retargeted: now always
+  //    scoped to a category, keyed cache instead of one shared cache. ──
+  const fetchAlertsForCategory = async (category, force = false) => {
+    const cached = state.alertsCache[category];
+    const isCacheFresh = config.cacheDuration > 0
+      && cached
+      && (Date.now() - cached.timestamp) < config.cacheDuration;
+
+    if (!force && isCacheFresh) {
+      log('serving alerts from cache for category', category);
+      state.alerts = cached.data;
+      hideGridHint();
+      renderAlerts();
+      return;
+    }
+
+    state.isLoading = true;
+    hideGridHint();
+    renderLoading();
+
+    if (state.abortController) state.abortController.abort();
+    state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+    // encodeURIComponent — never manually concatenate the raw value
+    const base = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
+    const url = `${base}?category=${encodeURIComponent(category)}`;
+
+    try {
+      const data = await request(url, {
+        method: 'GET',
+        signal: state.abortController ? state.abortController.signal : undefined,
+      });
+
+      if (!data || data.success !== true || !Array.isArray(data.alerts)) {
+        throw new Error('Unexpected response format from the alerts API.');
+      }
+
+      state.alerts = data.alerts;
+      state.alertsCache[category] = { data: data.alerts, timestamp: Date.now() };
+      renderAlerts();
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      state.alerts = [];
+      delete state.alertsCache[category];
+      const message = err && err.message ? err.message : 'Failed to load alerts.';
+      renderError(message);
+      if (typeof config.onError === 'function') config.onError(err);
+    } finally {
+      state.isLoading = false;
+    }
+  };
+
+
+
+
 
   const renderLoading = () => {
     els.grid.innerHTML = `
@@ -287,7 +471,11 @@ const SOS = (() => {
     `;
     const retryBtn = els.grid.querySelector('.sos-retry'); // scoped, no global ID lookup
     if (retryBtn) {
-      retryBtn.addEventListener('click', () => fetchAlerts(true)); // force bypasses the cache
+      retryBtn.addEventListener('click', () => {
+  if (state.selectedCategory) {
+      fetchAlertsForCategory(state.selectedCategory, true);
+        }
+      });
     }
   };
 
@@ -433,65 +621,8 @@ const SOS = (() => {
     }
   };
 
-  /**
-   * @param {boolean} [force=false] - bypasses the cache (used by the
-   *   Retry button so a manual retry never serves stale data).
-   */
-  const fetchAlerts = async (force = false) => {
-    // Serve from cache when it's still fresh; skips the network call
-    // entirely but still re-renders (handles a re-open right after a
-    // previous close).
-    const isCacheFresh = config.cacheDuration > 0
-      && state.alerts.length > 0
-      && (Date.now() - state.cacheTimestamp) < config.cacheDuration;
 
-    if (!force && isCacheFresh) {
-      log('serving alerts from cache');
-      renderAlerts();
-      return;
-    }
 
-    state.isLoading = true;
-    state.selectedAlert = null;
-    state.selectedIsCustom = false;
-    hideOtherInput(); // fresh fetch means no reason is selected yet
-    updateSendButton();
-    renderLoading();
-
-    // Abort a still-in-flight request from a previous open before
-    // starting a new one / if the modal closes mid-request.
-    if (state.abortController) state.abortController.abort();
-    state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-
-    const url = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
-
-    try {
-      const data = await request(url, {
-        method: 'GET',
-        signal: state.abortController ? state.abortController.signal : undefined,
-      });
-
-      if (!data || data.success !== true || !Array.isArray(data.alerts)) {
-        throw new Error('Unexpected response format from the alerts API.');
-      }
-
-      state.alerts = data.alerts;
-      state.cacheTimestamp = Date.now();
-      renderAlerts();
-    } catch (err) {
-      // A deliberate abort is not a real failure; the modal is either
-      // closing or a newer fetch has already taken over.
-      if (err && err.name === 'AbortError') return;
-
-      state.alerts = [];
-      state.cacheTimestamp = 0;
-      const message = err && err.message ? err.message : 'Failed to load alerts.';
-      renderError(message);
-      if (typeof config.onError === 'function') config.onError(err);
-    } finally {
-      state.isLoading = false;
-    }
-  };
 
   const selectAlert = (btnEl) => {
     if (!btnEl || state.isSending) return;
@@ -520,40 +651,12 @@ const SOS = (() => {
   };
 
   const updateSendButton = () => {
-    const enabled = !!state.selectedAlert && !state.isLoading && !state.isSending;
+    const enabled = !!state.selectedCategory && !!state.selectedAlert && !state.isLoading && !state.isSending;
     els.sendBtn.disabled = !enabled;
     els.sendBtn.setAttribute('aria-disabled', String(!enabled));
   };
 
-  const buildAlertText = (alertText) => {
 
-    const values = [];
-
-    if (
-      config.context &&
-      typeof config.context === "object"
-    ) {
-
-      Object.values(config.context).forEach(value => {
-
-        if (
-          value !== null &&
-          value !== undefined &&
-          String(value).trim() !== ""
-        ) {
-          values.push(String(value));
-        }
-
-      });
-
-    }
-
-    if (values.length === 0)
-      return alertText;
-
-    return `${alertText}, ${values.join(", ")}`;
-
-  };
 
   const sendAlert = async () => {
     if (!state.selectedAlert || state.isSending) return;
@@ -599,10 +702,14 @@ const SOS = (() => {
     els.sendBtn.innerHTML = '<span class="sos-send-spinner" aria-hidden="true"></span> Sending\u2026';
 
     const url = config.postAlertUrl || `${config.apiBase}/sos-alert`;
-    const payload = {
-      source_recid: state.selectedRecId,
-      alert: buildAlertText(alertText)
-    };
+    const other_attributes= config.context || {};
+    // ── sendAlert() — MODIFIED: payload now includes category ──
+  const payload = {
+    source_recid: state.selectedRecId,
+    category: state.selectedCategory,   // NEW
+    alert: alertText,
+    other_attributes: other_attributes
+  };
     log('sending alert', payload); // silent unless debug: true
 
     try {
@@ -635,7 +742,7 @@ const SOS = (() => {
   // ==========================================================
   // MODAL OPEN / CLOSE
   // ==========================================================
-
+  // ── openModal() — MODIFIED: fetch categories, not alerts, on open ──
   const openModal = () => {
     if (!els.overlay) createModal();
 
@@ -645,14 +752,23 @@ const SOS = (() => {
     document.body.style.overflow = 'hidden';
 
     bindModalEvents();
-    fetchAlerts();
 
-    // Move focus into the modal for accessibility
+    // Reset per-open UI state
+    state.selectedCategory = '';
+    if (els.categorySelect) els.categorySelect.value = '';
+    state.alerts = [];
+    els.grid.innerHTML = '';
+    showGridHint('Select a category to view alert reasons.');
+
+    fetchCategories(); // MODIFIED — was fetchAlerts()
+
     setTimeout(() => {
       els.closeBtn && els.closeBtn.focus();
     }, 50);
   };
 
+
+  // ── closeModal() — MODIFIED: also reset category state ──
   const closeModal = () => {
     if (!els.overlay) return;
 
@@ -666,8 +782,9 @@ const SOS = (() => {
     state.selectedAlert = null;
     state.selectedRecId = null;
     state.selectedIsCustom = false;
+    state.selectedCategory = '';   // NEW
     state.alerts = [];
-    hideOtherInput(); // clear/hide the free-text box (and its error) on close
+    hideOtherInput();
 
     if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
       lastFocusedEl.focus();
@@ -704,7 +821,7 @@ const SOS = (() => {
       // 'input:not([disabled])' included so the "Other" text box
       // participates in the Tab/Shift+Tab loop like every other control.
       const focusable = els.modal.querySelectorAll(
-        'button:not([disabled]), [tabindex]:not([tabindex="-1"]), input:not([disabled])'
+        'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
       );
       if (focusable.length === 0) return;
 
@@ -751,7 +868,7 @@ const SOS = (() => {
    * @param {Object} options
    * @param {string|HTMLElement} options.button - Selector or element for the trigger button.
    * @param {string} [options.apiBase='/app'] - Base path for the SOS endpoints.
-   * @param {Object} [options.context={}] - Additional page context to append to the alert.
+   * @param {Object} [options.context={}] - Additional page context sent separately as other_attributes.
    * @param {string} [options.getAlertsUrl] - Full override for the GET alerts URL.
    * @param {string} [options.postAlertUrl] - Full override for the POST alert URL.
    * @param {number} [options.cacheDuration=300000] - ms to reuse a cached alerts list (0 disables caching).
@@ -795,15 +912,18 @@ const SOS = (() => {
     }
 
     document.body.style.overflow = '';
-
-    els = {
-      triggerBtn: null, overlay: null, modal: null, grid: null, sendBtn: null, closeBtn: null,
-      otherWrapper: null, otherInput: null, otherCounter: null, otherError: null,
-    };
-    state = {
-      alerts: [], selectedAlert: null, selectedRecId: null, selectedIsCustom: false, isLoading: false,
-      isSending: false, initialized: false, cacheTimestamp: 0, abortController: null,
-    };
+  // ── destroy() — MODIFIED: reset new fields too ──
+  els = {
+    triggerBtn: null, overlay: null, modal: null, categorySelect: null, gridHint: null,
+    grid: null, sendBtn: null, closeBtn: null,
+    otherWrapper: null, otherInput: null, otherCounter: null, otherError: null,
+  };
+  state = {
+    alerts: [], categories: [], selectedCategory: '', isLoadingCategories: false,
+    categoriesCacheTimestamp: 0, alertsCache: {},
+    selectedAlert: null, selectedRecId: null, selectedIsCustom: false, isLoading: false,
+    isSending: false, initialized: false, abortController: null,
+  };
     config = {
       button: null, apiBase: '/app', context: {}, getAlertsUrl: null, postAlertUrl: null,
       cacheDuration: 300000, debug: false, onSuccess: null, onError: null,

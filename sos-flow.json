@@ -307,22 +307,6 @@
         "y": 240,
         "wires": [
             [
-                "5f2cebafaa1edca1"
-            ]
-        ]
-    },
-    {
-        "id": "5f2cebafaa1edca1",
-        "type": "json",
-        "z": "sos_flow_tab",
-        "name": "Parse Request Body",
-        "property": "payload",
-        "action": "obj",
-        "pretty": false,
-        "x": 380,
-        "y": 240,
-        "wires": [
-            [
                 "8af1443af4b35d01"
             ]
         ]
@@ -339,15 +323,14 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1210,
+        "x": 1050,
         "y": 240,
         "wires": [
             [
                 "d4e3d77b8cdb648f"
             ],
             [
-                "e027d2e75420a356",
-                "e5a584f6550410ab"
+                "e027d2e75420a356"
             ]
         ]
     },
@@ -357,7 +340,7 @@
         "z": "sos_flow_tab",
         "mydb": "c0be5e4c52ab8c07",
         "name": "",
-        "x": 1420,
+        "x": 1280,
         "y": 200,
         "wires": [
             [
@@ -377,12 +360,11 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1630,
+        "x": 1470,
         "y": 200,
         "wires": [
             [
-                "e027d2e75420a356",
-                "e5a584f6550410ab"
+                "e027d2e75420a356"
             ]
         ]
     },
@@ -393,7 +375,7 @@
         "name": "HTTP Response - Alert Save",
         "statusCode": "",
         "headers": {},
-        "x": 1890,
+        "x": 1700,
         "y": 240,
         "wires": []
     },
@@ -409,7 +391,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 630,
+        "x": 430,
         "y": 240,
         "wires": [
             [
@@ -422,29 +404,13 @@
         "type": "subflow:5c7279e5fed154c8",
         "z": "sos_flow_tab",
         "name": "VALIDATOR (SOS Alert)",
-        "x": 910,
+        "x": 750,
         "y": 240,
         "wires": [
             [
                 "ac7caaebd2414f46"
             ]
         ]
-    },
-    {
-        "id": "e5a584f6550410ab",
-        "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 17",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "false",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1350,
-        "y": 340,
-        "wires": []
     },
     {
         "id": "c0be5e4c52ab8c07",
@@ -457,7 +423,7 @@
         "charset": "UTF8"
     },
     {
-        "id": "8579a3741f0149e5",
+        "id": "e42eae5bbe9eb563",
         "type": "global-config",
         "env": [],
         "modules": {
