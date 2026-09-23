@@ -41,21 +41,20 @@ const SOS = (() => {
     onSuccess: null,       // optional (data) => {} called after a successful POST /sos-alert
     onError: null,         // optional (err) => {} called after a failed GET or POST
   };
-// REMOVE: categorySelect, gridHint
-// ADD: categoryGrid, alertSection
+
   let els = {
     triggerBtn: null,
     overlay: null,
     modal: null,
-    categoryGrid: null,     // NEW — replaces categorySelect
-    alertSection: null,     // NEW — hideable <section> wrapping "SELECT ALERT"
-    grid: null,             // UNCHANGED reference, now lives inside .sos-alert-section
+    categorySelect: null,   // NEW
+    gridHint: null,         // NEW
+    grid: null,
     sendBtn: null,
     closeBtn: null,
-    otherWrapper: null,
-    otherInput: null,
-    otherCounter: null,
-    otherError: null,
+    otherWrapper: null, // wrapper around the free-text "Other" input
+    otherInput: null,   // the free-text "Other" input itself
+    otherCounter: null, // "N / 150" live counter
+    otherError: null,   // NEW — inline red error message under the input
   };
 
   let state = {
@@ -201,34 +200,38 @@ const SOS = (() => {
   };
 
   // ==========================================================
-const createModal = () => {
-  const overlay = document.createElement('div');
-  overlay.className = 'sos-overlay';
-  overlay.setAttribute('role', 'presentation');
+  // DOM CREATION — no popup HTML ever lives on the page itself
+  // ==========================================================
+  // ── createModal() — MODIFIED markup: category select + grid hint added
+  //    above .sos-grid. Everything else in the template is unchanged. ──
+  const createModal = () => {
+    const overlay = document.createElement('div');
+    overlay.className = 'sos-overlay';
+    overlay.setAttribute('role', 'presentation');
 
-  overlay.innerHTML = `
-    <div class="sos-modal" role="dialog" aria-modal="true" aria-labelledby="sos-title">
-      <div class="sos-header">
-        <h2 class="sos-title" id="sos-title">Emergency Alert</h2>
-        <button type="button" class="sos-close" aria-label="Close">&#10005;</button>
-      </div>
-      <div class="sos-body">
-        <p class="sos-label">
-          <span class="sos-label-icon">&#9889;</span>
-          Select Alert Category
-        </p>
-
-        <!-- NEW — category buttons, replaces <select> entirely -->
-        <div class="sos-category-grid" role="group" aria-label="Select alert category"></div>
-
-        <!-- NEW — whole alert section hidden until a category is picked -->
-        <section class="sos-alert-section" hidden>
-          <p class="sos-label sos-alert-section-label">
+    overlay.innerHTML = `
+      <div class="sos-modal" role="dialog" aria-modal="true" aria-labelledby="sos-title">
+        <div class="sos-header">
+          <h2 class="sos-title" id="sos-title">Emergency Alert</h2>
+          <button type="button" class="sos-close" aria-label="Close">&#10005;</button>
+        </div>
+        <div class="sos-body">
+          <p class="sos-label">
             <span class="sos-label-icon">&#9889;</span>
-            Select Alert
+            Select Alert Category
           </p>
 
-          <div class="sos-grid" role="group" aria-label="Alert reasons"></div>
+          <!-- NEW — category dropdown, populated from GET /sos-alerts -->
+          <div class="sos-category-wrapper">
+            <select class="sos-category-select" aria-label="Alert category">
+              <option value="">Select category</option>
+            </select>
+          </div>
+
+          <!-- NEW — shown instead of the grid until a category is chosen -->
+          <div class="sos-grid-hint">Select a category to view alert reasons.</div>
+
+          <div class="sos-grid sos-grid-hidden" role="group" aria-label="Alert reasons"></div>
 
           <div class="sos-other-wrapper sos-other-hidden">
             <input
@@ -242,247 +245,210 @@ const createModal = () => {
             <div class="sos-other-error" role="alert" aria-live="assertive"></div>
             <div class="sos-other-counter" id="sos-other-counter" aria-live="polite">0 / 150</div>
           </div>
-        </section>
-      </div>
-      <div class="sos-footer">
-        <button type="button" class="sos-send" disabled aria-disabled="true">
-          Send Alert
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  els.overlay = overlay;
-  els.modal = overlay.querySelector('.sos-modal');
-  els.categoryGrid = overlay.querySelector('.sos-category-grid'); // NEW
-  els.alertSection = overlay.querySelector('.sos-alert-section'); // NEW
-  els.grid = overlay.querySelector('.sos-grid');                  // now inside .sos-alert-section
-  els.sendBtn = overlay.querySelector('.sos-send');
-  els.closeBtn = overlay.querySelector('.sos-close');
-  els.otherWrapper = overlay.querySelector('.sos-other-wrapper');
-  els.otherInput = overlay.querySelector('.sos-other-input');
-  els.otherCounter = overlay.querySelector('.sos-other-counter');
-  els.otherError = overlay.querySelector('.sos-other-error');
-
-  els.categoryGrid.addEventListener('click', onCategoryGridClick); // NEW — event delegation
-  els.grid.addEventListener('click', onGridClick);
-  els.sendBtn.addEventListener('click', onSendClick);
-  els.closeBtn.addEventListener('click', onCloseClick);
-  els.overlay.addEventListener('click', onOverlayClick);
-  els.otherInput.addEventListener('input', onOtherInputChange);
-  els.otherInput.addEventListener('keydown', onOtherInputKeydown);
-};
-
-
-// ── NEW — click delegation on the category grid ──
-const onCategoryGridClick = (e) => {
-  const btn = e.target.closest('.sos-category-btn');
-  if (btn) onCategorySelect(btn.dataset.category);
-};
-
-// ── MODIFIED — renders category BUTTONS (was <option> population).
-//    textContent + createElement only — categories are untrusted
-//    backend data and must never go through innerHTML. ──
-const renderCategories = () => {
-  if (!els.categoryGrid) return;
-  els.categoryGrid.innerHTML = '';
-
-  if (!Array.isArray(state.categories) || state.categories.length === 0) {
-    els.categoryGrid.innerHTML = `
-      <div class="sos-state" style="grid-column: 1 / -1;">
-        <span>No categories are available right now.</span>
+        </div>
+        <div class="sos-footer">
+          <button type="button" class="sos-send" disabled aria-disabled="true">
+            Send Alert
+          </button>
+        </div>
       </div>
     `;
-    return;
-  }
 
-  const fragment = document.createDocumentFragment(); // NEW — batch append, single reflow
+    document.body.appendChild(overlay);
 
-  state.categories.forEach((item) => {
-    const label = (item && item.category !== undefined && item.category !== null)
-      ? String(item.category)
-      : '';
-    if (!label.trim()) return;
+    els.overlay = overlay;
+    els.modal = overlay.querySelector('.sos-modal');
+    els.categorySelect = overlay.querySelector('.sos-category-select'); // NEW
+    els.gridHint = overlay.querySelector('.sos-grid-hint');             // NEW
+    els.grid = overlay.querySelector('.sos-grid');
+    els.sendBtn = overlay.querySelector('.sos-send');
+    els.closeBtn = overlay.querySelector('.sos-close');
+    els.otherWrapper = overlay.querySelector('.sos-other-wrapper');
+    els.otherInput = overlay.querySelector('.sos-other-input');
+    els.otherCounter = overlay.querySelector('.sos-other-counter');
+    els.otherError = overlay.querySelector('.sos-other-error');
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'sos-category-btn';
-    btn.dataset.category = label;
-    btn.textContent = label; // textContent — no injection risk
-    btn.setAttribute('aria-pressed', 'false');
-    fragment.appendChild(btn);
-  });
+    els.categorySelect.addEventListener('change', onCategoryChange); // NEW
+    els.grid.addEventListener('click', onGridClick);
+    els.sendBtn.addEventListener('click', onSendClick);
+    els.closeBtn.addEventListener('click', onCloseClick);
+    els.overlay.addEventListener('click', onOverlayClick);
+    els.otherInput.addEventListener('input', onOtherInputChange);
+    els.otherInput.addEventListener('keydown', onOtherInputKeydown);
+  };
 
-  els.categoryGrid.appendChild(fragment);
-};
+    // ── NEW — category dropdown change handler ──
+  const onCategoryChange = (e) => {
+    const category = e.target.value;
+    state.selectedCategory = category;
 
-// ── NEW — loading/error states for the category grid itself
-//    (this is the only visible content before a category is picked) ──
-const renderCategoryLoading = () => {
-  els.categoryGrid.innerHTML = `
-    <div class="sos-state" style="grid-column: 1 / -1;" role="status" aria-live="polite">
-      <div class="sos-spinner" aria-hidden="true"></div>
-      <span>Loading categories&hellip;</span>
-    </div>
-  `;
-};
+    // Reset alert selection on every category change
+    state.selectedAlert = null;
+    state.selectedRecId = null;
+    state.selectedIsCustom = false;
+    hideOtherInput();
+    updateSendButton();
 
-// ── MODIFIED — was showGridHint('') + wrote into els.grid;
-//    now writes into els.categoryGrid, since alerts aren't shown yet. ──
-const renderCategoryError = (message) => {
-  els.categoryGrid.innerHTML = `
-    <div class="sos-state" style="grid-column: 1 / -1;" role="alert">
-      <span>${escapeHtml(message || 'Unable to load categories.')}</span>
-      <button type="button" class="sos-retry">Retry</button>
-    </div>
-  `;
-  const retryBtn = els.categoryGrid.querySelector('.sos-retry');
-  if (retryBtn) retryBtn.addEventListener('click', () => fetchCategories(true));
-};
-
-// ── NEW — toggles selected visual/aria state on category buttons ──
-const updateCategorySelectionUI = () => {
-  els.categoryGrid.querySelectorAll('.sos-category-btn').forEach((btn) => {
-    const isSelected = btn.dataset.category === state.selectedCategory;
-    btn.classList.toggle('is-selected', isSelected);
-    btn.setAttribute('aria-pressed', String(isSelected));
-  });
-};
-
-// ── REPLACES onCategoryChange(e). Takes the category value directly
-//    (the click-delegation handler above pulls it from dataset). ──
-const onCategorySelect = (category) => {
-  if (!category || state.isSending) return;
-
-  state.selectedCategory = category;
-
-  // Reset alert selection on every category change — same as before
-  state.selectedAlert = null;
-  state.selectedRecId = null;
-  state.selectedIsCustom = false;
-  hideOtherInput();
-
-  updateCategorySelectionUI();
-
-  els.grid.innerHTML = '';
-  els.alertSection.hidden = false; // NEW — reveal Step 2
-
-  updateSendButton();
-
-  fetchAlertsForCategory(category); // EXISTING function, called exactly as before
-};
-
-
-  
-
-
-
-    // ── NEW — GET /sos-alerts (no category) ──
-const fetchCategories = async (force = false) => {
-  const isCacheFresh = config.cacheDuration > 0
-    && state.categories.length > 0
-    && (Date.now() - state.categoriesCacheTimestamp) < config.cacheDuration;
-
-  if (!force && isCacheFresh) {
-    log('serving categories from cache');
-    renderCategories(); // same call, new implementation
-    return;
-  }
-
-  state.isLoadingCategories = true;
-  renderCategoryLoading(); // MODIFIED — was showGridHint('Loading categories…')
-
-  if (state.abortController) state.abortController.abort();
-  state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-
-  const url = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
-
-  try {
-    const data = await request(url, {
-      method: 'GET',
-      signal: state.abortController ? state.abortController.signal : undefined,
-    });
-
-    if (!data || data.success !== true || !Array.isArray(data.categories)) {
-      throw new Error('Unexpected response format from the categories API.');
-    }
-
-    state.categories = data.categories;
-    state.categoriesCacheTimestamp = Date.now();
-    renderCategories(); // MODIFIED — removed the showGridHint(...) call after it
-  } catch (err) {
-    if (err && err.name === 'AbortError') return;
-    state.categories = [];
-    state.categoriesCacheTimestamp = 0;
-    renderCategoryError(err && err.message ? err.message : 'Failed to load categories.'); // MODIFIED
-    if (typeof config.onError === 'function') config.onError(err);
-  } finally {
-    state.isLoadingCategories = false;
-  }
-};
-
-    // ── MODIFIED — fetchAlerts() renamed/retargeted: now always
-  //    scoped to a category, keyed cache instead of one shared cache. ──
-
-const fetchAlertsForCategory = async (category, force = false) => {
-  const cached = state.alertsCache[category];
-  const isCacheFresh = config.cacheDuration > 0
-    && cached
-    && (Date.now() - cached.timestamp) < config.cacheDuration;
-
-  if (!force && isCacheFresh) {
-    log('serving alerts from cache for category', category);
-    state.alerts = cached.data;
-    renderAlerts(); // MODIFIED — removed hideGridHint()
-    return;
-  }
-
-  state.isLoading = true;
-  renderLoading(); // MODIFIED — removed hideGridHint()
-  updateSendButton();
-
-  if (state.abortController) state.abortController.abort();
-  state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-
-  const base = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
-  const url = `${base}?category=${encodeURIComponent(category)}`; // UNCHANGED — still encoded
-
-  try {
-    const data = await request(url, {
-      method: 'GET',
-      signal: state.abortController ? state.abortController.signal : undefined,
-    });
-
-    if (!data || data.success !== true || !Array.isArray(data.alerts)) {
-      throw new Error('Unexpected response format from the alerts API.');
-    }
-
-    // NEW — stale-response guard: if the user switched categories
-    // while this request was in flight, a slower earlier response
-    // must not overwrite the currently-selected category's alerts.
-    if (state.selectedCategory !== category) {
-      log('discarding stale alerts response for', category, '— current is', state.selectedCategory);
+    if (!category) {
+      state.alerts = [];
+      els.grid.innerHTML = '';
+      showGridHint('Select a category to view alert reasons.');
       return;
     }
 
-    state.alerts = data.alerts;
-    state.alertsCache[category] = { data: data.alerts, timestamp: Date.now() };
-    renderAlerts();
-  } catch (err) {
-    if (err && err.name === 'AbortError') return;
-    if (state.selectedCategory !== category) return; // NEW — same guard on failure path
-    state.alerts = [];
-    delete state.alertsCache[category];
-    const message = err && err.message ? err.message : 'Failed to load alerts.';
-    renderError(message);
-    if (typeof config.onError === 'function') config.onError(err);
-  } finally {
-    state.isLoading = false;
-    updateSendButton();
-  }
-};
+    fetchAlertsForCategory(category);
+  };
+
+  // ── NEW — grid hint helpers ──
+  const showGridHint = (message) => {
+    if (els.gridHint) {
+      els.gridHint.textContent = message;
+      els.gridHint.classList.remove('sos-grid-hint-hidden');
+    }
+    if (els.grid) els.grid.classList.add('sos-grid-hidden');
+  };
+
+  const hideGridHint = () => {
+    if (els.gridHint) els.gridHint.classList.add('sos-grid-hint-hidden');
+    if (els.grid) els.grid.classList.remove('sos-grid-hidden');
+  };
+
+    // ── NEW — populate the category <select> from backend data ──
+  const renderCategories = () => {
+    if (!els.categorySelect) return;
+    const current = els.categorySelect.value;
+
+    els.categorySelect.innerHTML = '<option value="">Select category</option>';
+
+    state.categories.forEach((item) => {
+      const label = (item && item.category !== undefined && item.category !== null)
+        ? String(item.category)
+        : '';
+      if (!label.trim()) return;
+
+      const opt = document.createElement('option');
+      opt.value = label;
+      opt.textContent = label; // textContent — no innerHTML, no injection risk
+      els.categorySelect.appendChild(opt);
+    });
+
+    // Preserve selection across a re-render (e.g. Retry) if it still exists
+    if (current && Array.from(els.categorySelect.options).some((o) => o.value === current)) {
+      els.categorySelect.value = current;
+    }
+  };
+
+  const renderCategoryError = (message) => {
+    showGridHint(''); // clear hint text, error goes in grid area instead
+    els.grid.classList.remove('sos-grid-hidden');
+    els.grid.innerHTML = `
+      <div class="sos-state" style="grid-column: 1 / -1;" role="alert">
+        <span>${escapeHtml(message || 'Unable to load categories.')}</span>
+        <button type="button" class="sos-retry">Retry</button>
+      </div>
+    `;
+    const retryBtn = els.grid.querySelector('.sos-retry');
+    if (retryBtn) retryBtn.addEventListener('click', () => fetchCategories(true));
+  };
+
+    // ── NEW — GET /sos-alerts (no category) ──
+  const fetchCategories = async (force = false) => {
+    const isCacheFresh = config.cacheDuration > 0
+      && state.categories.length > 0
+      && (Date.now() - state.categoriesCacheTimestamp) < config.cacheDuration;
+
+    if (!force && isCacheFresh) {
+      log('serving categories from cache');
+      renderCategories();
+      showGridHint('Select a category to view alert reasons.');
+      return;
+    }
+
+    state.isLoadingCategories = true;
+    showGridHint('Loading categories…');
+
+    if (state.abortController) state.abortController.abort();
+    state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+    const url = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
+
+    try {
+      const data = await request(url, {
+        method: 'GET',
+        signal: state.abortController ? state.abortController.signal : undefined,
+      });
+
+      if (!data || data.success !== true || !Array.isArray(data.categories)) {
+        throw new Error('Unexpected response format from the categories API.');
+      }
+
+      state.categories = data.categories;
+      state.categoriesCacheTimestamp = Date.now();
+      renderCategories();
+      showGridHint('Select a category to view alert reasons.');
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      state.categories = [];
+      state.categoriesCacheTimestamp = 0;
+      renderCategoryError(err && err.message ? err.message : 'Failed to load categories.');
+      if (typeof config.onError === 'function') config.onError(err);
+    } finally {
+      state.isLoadingCategories = false;
+    }
+  };
+
+    // ── MODIFIED — fetchAlerts() renamed/retargeted: now always
+  //    scoped to a category, keyed cache instead of one shared cache. ──
+  const fetchAlertsForCategory = async (category, force = false) => {
+    const cached = state.alertsCache[category];
+    const isCacheFresh = config.cacheDuration > 0
+      && cached
+      && (Date.now() - cached.timestamp) < config.cacheDuration;
+
+    if (!force && isCacheFresh) {
+      log('serving alerts from cache for category', category);
+      state.alerts = cached.data;
+      hideGridHint();
+      renderAlerts();
+      return;
+    }
+
+    state.isLoading = true;
+    hideGridHint();
+    renderLoading();
+
+    if (state.abortController) state.abortController.abort();
+    state.abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+
+    // encodeURIComponent — never manually concatenate the raw value
+    const base = config.getAlertsUrl || `${config.apiBase}/sos-alerts`;
+    const url = `${base}?category=${encodeURIComponent(category)}`;
+
+    try {
+      const data = await request(url, {
+        method: 'GET',
+        signal: state.abortController ? state.abortController.signal : undefined,
+      });
+
+      if (!data || data.success !== true || !Array.isArray(data.alerts)) {
+        throw new Error('Unexpected response format from the alerts API.');
+      }
+
+      state.alerts = data.alerts;
+      state.alertsCache[category] = { data: data.alerts, timestamp: Date.now() };
+      renderAlerts();
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      state.alerts = [];
+      delete state.alertsCache[category];
+      const message = err && err.message ? err.message : 'Failed to load alerts.';
+      renderError(message);
+      if (typeof config.onError === 'function') config.onError(err);
+    } finally {
+      state.isLoading = false;
+    }
+  };
+
 
 
 
@@ -776,6 +742,7 @@ const fetchAlertsForCategory = async (category, force = false) => {
   // ==========================================================
   // MODAL OPEN / CLOSE
   // ==========================================================
+  // ── openModal() — MODIFIED: fetch categories, not alerts, on open ──
   const openModal = () => {
     if (!els.overlay) createModal();
 
@@ -788,40 +755,41 @@ const fetchAlertsForCategory = async (category, force = false) => {
 
     // Reset per-open UI state
     state.selectedCategory = '';
+    if (els.categorySelect) els.categorySelect.value = '';
     state.alerts = [];
     els.grid.innerHTML = '';
-    els.alertSection.hidden = true; // MODIFIED — was: els.categorySelect.value = ''; showGridHint(...)
+    showGridHint('Select a category to view alert reasons.');
 
-    fetchCategories();
+    fetchCategories(); // MODIFIED — was fetchAlerts()
 
     setTimeout(() => {
       els.closeBtn && els.closeBtn.focus();
     }, 50);
   };
 
+
   // ── closeModal() — MODIFIED: also reset category state ──
-const closeModal = () => {
-  if (!els.overlay) return;
+  const closeModal = () => {
+    if (!els.overlay) return;
 
-  els.overlay.classList.remove('sos-open');
-  document.body.style.overflow = '';
+    els.overlay.classList.remove('sos-open');
+    document.body.style.overflow = '';
 
-  unbindModalEvents();
+    unbindModalEvents();
 
-  if (state.abortController) state.abortController.abort();
+    if (state.abortController) state.abortController.abort();
 
-  state.selectedAlert = null;
-  state.selectedRecId = null;
-  state.selectedIsCustom = false;
-  state.selectedCategory = '';
-  state.alerts = [];
-  hideOtherInput();
-  if (els.alertSection) els.alertSection.hidden = true; // NEW — keeps re-open state clean
+    state.selectedAlert = null;
+    state.selectedRecId = null;
+    state.selectedIsCustom = false;
+    state.selectedCategory = '';   // NEW
+    state.alerts = [];
+    hideOtherInput();
 
-  if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
-    lastFocusedEl.focus();
-  }
-};
+    if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
+      lastFocusedEl.focus();
+    }
+  };
 
   // ==========================================================
   // EVENT BINDING
@@ -852,10 +820,9 @@ const closeModal = () => {
     if (e.key === 'Tab') {
       // 'input:not([disabled])' included so the "Other" text box
       // participates in the Tab/Shift+Tab loop like every other control.
-        const focusable = els.modal.querySelectorAll(
-          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-          // REMOVED: 'select:not([disabled]), ' — no <select> left in the modal
-        );
+      const focusable = els.modal.querySelectorAll(
+        'button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
       if (focusable.length === 0) return;
 
       const first = focusable[0];
@@ -947,7 +914,7 @@ const closeModal = () => {
     document.body.style.overflow = '';
   // ── destroy() — MODIFIED: reset new fields too ──
   els = {
-    triggerBtn: null, overlay: null, modal: null, categoryGrid: null, alertSection: null,
+    triggerBtn: null, overlay: null, modal: null, categorySelect: null, gridHint: null,
     grid: null, sendBtn: null, closeBtn: null,
     otherWrapper: null, otherInput: null, otherCounter: null, otherError: null,
   };

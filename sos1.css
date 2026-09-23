@@ -119,8 +119,8 @@
    MODAL
    ============================================================ */
 .sos-modal {
-    width: min(92vw, 460px);        /* MODIFIED — was: width: 100%; max-width: 460px; */
-  max-height: min(90dvh, 640px);
+  width: 100%;
+  max-width: 460px;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
@@ -202,83 +202,82 @@
 }
 
 /* ============================================================
-   CATEGORY BUTTONS — NEW
-   auto-fit grid scales from 2 categories to 100 with zero JS
-   or breakpoint changes.
+   CATEGORY SELECT — NEW
+   Reuses the same --form-* tokens as .sos-other-input so it
+   matches host-page <select> styling automatically.
    ============================================================ */
-.sos-category-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--btn-group-gap, 10px);
-  margin-bottom: var(--section-gap, 20px);
+.sos-category-wrapper {
+  margin: 0 0 var(--section-gap, 20px);
 }
 
-.sos-category-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  min-height: 44px;   /* touch target */
-  min-width: 0;
-  padding: 10px 14px;
-  border: var(--sos-border);
-  border-radius: var(--sos-radius-sm);
-  background: var(--sos-bg-page);
-  color: var(--sos-text-muted);
-  font-family: var(--sos-font);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-  transition:
-    background var(--sos-transition-fast),
-    border-color var(--sos-transition-fast),
-    color var(--sos-transition-fast),
-    transform var(--sos-transition-fast);
-}
-
-.sos-category-btn:hover {
-  border-color: var(--sos-red);
+.sos-category-select {
+  display: block;
+  width: 100%;
+  padding: var(--inp-padding-top, 18px) var(--inp-padding-x, 14px) var(--inp-padding-bottom, 8px);
+  padding-right: 40px;
+  border-radius: var(--sos-radius-md);
+  border: var(--sos-border-width) var(--sos-border-style) var(--form-border, rgba(239, 128, 28, 0.25));
+  background-color: var(--form-surface, #141414);
   color: var(--sos-text);
-  background: var(--sos-red-tint);
-}
-
-.sos-category-btn:active {
-  transform: scale(0.98);
-}
-
-.sos-category-btn:focus-visible {
+  font-family: var(--sos-font);
+  font-size: var(--fs-input, 18px);
+  font-weight: var(--inp-font-weight, 500);
   outline: none;
+  box-sizing: border-box;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  transition: var(--inp-transition, 0.2s ease);
+}
+
+.sos-category-select:hover {
+  background-color: var(--form-surface-hover, #1e1e1e);
+}
+
+.sos-category-select:focus {
+  border-color: var(--sos-red);
   box-shadow: var(--form-ring-size, 0 0 0 3px) var(--sos-red-tint);
 }
 
-.sos-category-btn.is-selected {
-  background: linear-gradient(135deg, var(--sos-red), var(--sos-red-dark));
-  border-color: var(--sos-red);
+.sos-category-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sos-category-select option {
+  background: var(--form-surface, #141414);
   color: var(--sos-text);
 }
 
-/* ============================================================
-   ALERT SECTION — NEW
-   Toggled purely via the `hidden` attribute in sos.js — no
-   class needed for show/hide.
-   ============================================================ */
-.sos-alert-section[hidden] {
+/* Hint shown instead of the grid before a category is picked. */
+.sos-grid-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 10px;
+  color: var(--sos-text-muted);
+  font-size: 13px;
+  text-align: center;
+  margin-bottom: var(--section-gap, 20px);
+}
+
+.sos-grid-hint.sos-grid-hint-hidden {
   display: none;
 }
 
-.sos-alert-section-label {
-  margin-top: 4px;
+.sos-grid.sos-grid-hidden {
+  display: none;
 }
 
 /* ---- Alert grid ---- */
 .sos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--btn-group-gap, 10px);
-  margin-bottom: var(--section-gap, 20px);
+   margin-bottom: var(--section-gap, 20px);
 }
 
 @media screen and (max-width: 900px) {
@@ -311,17 +310,11 @@
   text-transform: uppercase;
   line-height: 1.3;
   cursor: pointer;
-  min-width: 0;             /* NEW */
-  overflow-wrap: anywhere;  /* NEW */
   transition:
     background var(--sos-transition-fast),
     border-color var(--sos-transition-fast),
     color var(--sos-transition-fast),
     transform var(--sos-transition-fast);
-}
-
-.sos-alert.sos-selected::before {
-  content: '\2713\00A0'; /* ✓ + nbsp */
 }
 
 /* Full-width variant for a lone "Other" style option */
