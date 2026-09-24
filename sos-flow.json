@@ -1,5 +1,594 @@
 [
     {
+        "id": "cc7f1a2b3c4d5e60",
+        "type": "subflow",
+        "name": "NOTIFY",
+        "info": "CC NOTIFY — save the notification, then announce it.\n\nWrites one row per recipient into `user_notifications`, THEN attempts the\nweb push. A failed / undelivered / never-subscribed push can no longer\nlose a notification.\n\nReplaces the old NOTIFY ADAPTER + PUSH NOTIFY pair. One node, not two.\n\n=========================== RECIPIENTS ===========================\nrecipientMode:\n  role -> notify role(s)      recipientValue = \"billing,coordinator\"\n  user -> notify username(s)  recipientValue = \"jsmith\"\n  all  -> everyone active     recipientValue ignored\n\nrecipientPath: msg path holding recipients resolved by your flow.\n  Accepts an array or a comma-string. Dotted paths work.\n  When set it OVERRIDES recipientValue. Resolves empty -> dropped.\n  recipientMode still applies — it says which column to match against.\n\nIMPORTANT: usernames, not display names.\n\n============================ LEDGER ==============================\nsaveToInbox: yes (default) saves a user_notifications row per\n  recipient and then pushes. No sends the push ONLY.\n\n  Use \"no\" for snapshot-shaped notifications: a digest whose body is a\n  count and a CTA (\"5 orders overdue — tap to view\") goes stale within\n  hours, and a week of them crowds out the real events. Anything that\n  states a fact about a record should stay on \"yes\".\n\n  Skipping means a missed push is a lost notification, which is the\n  failure this subflow exists to prevent. Treat it as the exception.\n\n=========================== TEMPLATES ============================\ndataRoot: where endpoint data lives (default: payload).\n  {{field}} resolves relative to this.\n\ntag: rendered per record. Give each notification a DISTINCT tag\n  (include the record id) — Web Push collapses shared tags.\n\nurl: real deep link, and check the recipient's role can reach it.\n  In the notification centre every entry is a permanent link, so\n  ./home is a poor default and a page they can't open is worse.\n\n===================== SETUP ON A NEW PROJECT =====================\nSee CC-NOTIFY-SETUP.md. In short:\n  1. Run cc-notify.sql\n  2. Point the web-push node at this project's VAPID config  <-- REQUIRED\n  3. Check the three [3] resolve SELECTs match this project's user table\n  4. Confirm the four DB nodes resolve (CopperCloud standard id)",
+        "category": "",
+        "in": [
+            {
+                "x": 60,
+                "y": 160,
+                "wires": [
+                    {
+                        "id": "ccn_render"
+                    }
+                ]
+            }
+        ],
+        "out": [],
+        "env": [
+            {
+                "name": "recipientMode",
+                "type": "str",
+                "value": "role",
+                "ui": {
+                    "label": {
+                        "en-US": "Recipient mode"
+                    },
+                    "type": "select",
+                    "opts": {
+                        "opts": [
+                            {
+                                "l": {
+                                    "en-US": "role (fixed role)"
+                                },
+                                "v": "role"
+                            },
+                            {
+                                "l": {
+                                    "en-US": "user (fixed username)"
+                                },
+                                "v": "user"
+                            },
+                            {
+                                "l": {
+                                    "en-US": "all (broadcast to everyone)"
+                                },
+                                "v": "all"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "recipientValue",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Recipient value"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "recipientPath",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Recipient path (msg) — overrides value"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "dataRoot",
+                "type": "str",
+                "value": "payload",
+                "ui": {
+                    "label": {
+                        "en-US": "Data root (msg path)"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "saveToInbox",
+                "type": "str",
+                "value": "y",
+                "ui": {
+                    "label": {
+                        "en-US": "Save to notification centre"
+                    },
+                    "type": "select",
+                    "opts": {
+                        "opts": [
+                            {
+                                "l": {
+                                    "en-US": "yes — save + push (default)"
+                                },
+                                "v": "y"
+                            },
+                            {
+                                "l": {
+                                    "en-US": "no — push only, no inbox row"
+                                },
+                                "v": "n"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "titleTemplate",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Title template"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "bodyTemplate",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Body template"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "url",
+                "type": "str",
+                "value": "./home",
+                "ui": {
+                    "label": {
+                        "en-US": "URL (deep link)"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            },
+            {
+                "name": "tag",
+                "type": "str",
+                "value": "",
+                "ui": {
+                    "label": {
+                        "en-US": "Tag"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            }
+        ],
+        "meta": {
+            "module": "cc-notify",
+            "version": "1.1.0",
+            "desc": "Notification ledger + web push",
+            "author": "CopperCloud Platform Team"
+        },
+        "color": "#87A96B",
+        "icon": "font-awesome/fa-bell-o"
+    },
+    {
+        "id": "ccn_note",
+        "type": "comment",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "SETUP: point [10] push at this project's VAPID config",
+        "info": "The web-push node ships with NO vapidConfiguration. It will show a\nred error on deploy until you pick one — that is deliberate. An\nunset VAPID config is a silent no-send otherwise, and a red node\nis a louder reminder than a line in a setup doc.\n\nThe four DB nodes reference the CopperCloud standard DB subflow\n(cb85b1c398c1c3ab). If this project uses a different id, re-point\nthem — they will show as unknown-node otherwise.\n\nThe three [3] resolve SELECTs assume a `users` table with\n`recid`, `username`, `userrole` (JSON) and `active`. Adjust them\nhere if this project's schema differs. Keep the `u` alias — the\nrole clause built in [1] depends on it.",
+        "x": 230,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "ccn_render",
+        "type": "function",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[1] render + resolve config",
+        "func": "// ============================================================\n// CC NOTIFY — [1] render + resolve config\n//\n// Reads the subflow env config, renders {{field}} templates\n// against the endpoint's data, and normalises targeting into\n// the SQL fragments the resolve step needs.\n//\n// No SQL is built here. This node emits params + fragments only.\n// ============================================================\n\n// ── CONFIG ───────────────────────────────────────────────────\nconst recipientMode   = env.get('recipientMode')  || 'role';    // role | user | all\nconst recipientValue  = env.get('recipientValue') || '';        // \"billing,coordinator\"\nconst recipientPath   = env.get('recipientPath')  || '';        // msg path, overrides value\nconst dataRootPath    = env.get('dataRoot')       || 'payload';\nconst titleTemplate   = env.get('titleTemplate')  || 'Notification';\nconst bodyTemplate    = env.get('bodyTemplate')   || '';\nconst urlTemplate     = env.get('url')            || './home';\nconst notificationTag = env.get('tag')            || 'notification';\n\n// Ledger toggle. Default is to save — skipping is the deliberate\n// exception, so an unset env var must never silently drop the row.\nconst saveToInbox     = (env.get('saveToInbox') || 'y') !== 'n';\n\n// ── HELPERS ──────────────────────────────────────────────────\n\n// Walk a dotted path: getValueAtPath(msg, 'ctx.req') -> msg.ctx.req\n// Returns undefined (never throws) if any link is missing.\nfunction getValueAtPath(sourceObject, dottedPath) {\n  const pathSegments = String(dottedPath || '').split('.');\n  return pathSegments.reduce(\n    (currentValue, segment) =>\n      (currentValue == null ? undefined : currentValue[segment]),\n    sourceObject\n  );\n}\n\n// \"Card {{pcn}}\" -> \"Card PCN-12345\". Missing fields render empty.\nfunction renderTemplate(templateString, sourceData) {\n  const PLACEHOLDER_PATTERN = /{{\\s*([\\w.]+)\\s*}}/g;\n  return String(templateString || '').replace(\n    PLACEHOLDER_PATTERN,\n    (fullMatch, fieldName) => {\n      const fieldValue = getValueAtPath(sourceData, fieldName);\n      return fieldValue == null ? '' : fieldValue;\n    }\n  );\n}\n\n// \"alice, bob\" -> ['alice','bob']   (blanks dropped)\nfunction splitCommaList(commaSeparatedString) {\n  return String(commaSeparatedString || '')\n    .split(',')\n    .map(item => item.trim())\n    .filter(Boolean);\n}\n\n// Accepts ['a','b'] or \"a,b\" or \"a\" — all become ['a', ...].\nfunction toRecipientList(rawValue) {\n  if (Array.isArray(rawValue)) {\n    return rawValue.map(item => String(item).trim()).filter(Boolean);\n  }\n  return splitCommaList(rawValue);\n}\n\n// ── DATA SOURCE FOR TEMPLATES ────────────────────────────────\n// Deliberately independent of the recipient — record data and\n// recipients come from different places.\nconst templateData = getValueAtPath(msg, dataRootPath) || {};\n\n// ── RESOLVE RECIPIENTS ───────────────────────────────────────\n// Static env value unless recipientPath is configured. An empty\n// dynamic lookup DROPS the message rather than falling back to\n// the static value — notifying the wrong people is worse than\n// notifying nobody.\nlet resolvedRecipients;\n\nif (recipientPath) {\n  resolvedRecipients = toRecipientList(getValueAtPath(msg, recipientPath));\n\n  if (resolvedRecipients.length === 0) {\n    node.warn(\n      `CC NOTIFY: recipientPath \"${recipientPath}\" resolved empty — ` +\n      `dropping \"${titleTemplate}\". Check the lookup upstream.`\n    );\n    return null;\n  }\n} else {\n  resolvedRecipients = splitCommaList(recipientValue);\n}\n\n// ── RENDER ONCE ──────────────────────────────────────────────\n// Both the ledger and the push read from this. Rendering once is\n// what stops the saved row and the delivered push disagreeing.\nmsg.notif = {\n  title: renderTemplate(titleTemplate, templateData),\n  body:  renderTemplate(bodyTemplate,  templateData),\n  url:   renderTemplate(urlTemplate,   templateData),\n  tag:   renderTemplate(notificationTag, templateData)\n};\n\n// ── SHAPE THE TARGETING ──────────────────────────────────────\n// Emits the WHERE fragment + params for step [3]. The `u.` alias\n// is baked into roleClause, so the resolve SELECTs must alias\n// the user table as `u`.\nif (recipientMode === 'user') {\n  if (resolvedRecipients.length === 0) {\n    node.warn(`CC NOTIFY: no usernames for \"${titleTemplate}\" — dropping.`);\n    return null;\n  }\n  msg.placeholders = resolvedRecipients.map(() => '?').join(',');\n  msg.payload = resolvedRecipients;\n}\nelse if (recipientMode === 'role') {\n  if (resolvedRecipients.length === 0) {\n    node.warn(`CC NOTIFY: no roles for \"${titleTemplate}\" — dropping.`);\n    return null;\n  }\n  msg.roleClause = resolvedRecipients\n    .map(() => 'JSON_CONTAINS(u.userrole, JSON_QUOTE(?))')\n    .join(' OR ');\n  msg.payload = resolvedRecipients;\n}\nelse if (recipientMode === 'all') {\n  msg.payload = [];\n}\nelse {\n  node.warn(`CC NOTIFY: unknown recipientMode \"${recipientMode}\" — dropping.`);\n  return null;\n}\n\nmsg.selectMode  = recipientMode;\n\n// Carried on the message rather than read again downstream: a switch node\n// reading env would work, but this way the decision shows up in a debug\n// dump, which matters when someone asks why a notification never appeared\n// in the panel.\nmsg.saveToInbox = saveToInbox;\n\n// ── STRIP HTTP CONTEXT (fire-and-forget) ─────────────────────\n// The endpoint already sent its response. If msg.res survived,\n// anything downstream could fire a second one.\ndelete msg.req;\ndelete msg.res;\ndelete msg.statusCode;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 220,
+        "y": 160,
+        "wires": [
+            [
+                "ccn_switch"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_switch",
+        "type": "switch",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[2] route by mode",
+        "property": "selectMode",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "user",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "role",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "all",
+                "vt": "str"
+            }
+        ],
+        "checkall": "false",
+        "repair": false,
+        "outputs": 3,
+        "x": 470,
+        "y": 160,
+        "wires": [
+            [
+                "ccn_sql_user"
+            ],
+            [
+                "ccn_sql_role"
+            ],
+            [
+                "ccn_sql_all"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_sql_user",
+        "type": "template",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[3] users by username",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "SELECT DISTINCT u.recid\nFROM users u\nWHERE u.active = 'y'\nAND u.username IN ({{{placeholders}}});",
+        "output": "str",
+        "x": 720,
+        "y": 100,
+        "wires": [
+            [
+                "ccn_db_resolve"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_sql_role",
+        "type": "template",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[3] users by role",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "SELECT DISTINCT u.recid\nFROM users u\nWHERE u.active = 'y'\nAND ({{{roleClause}}});",
+        "output": "str",
+        "x": 720,
+        "y": 160,
+        "wires": [
+            [
+                "ccn_db_resolve"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_sql_all",
+        "type": "template",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[3] all active users",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "SELECT u.recid\nFROM users u\nWHERE u.active = 'y';",
+        "output": "str",
+        "x": 720,
+        "y": 220,
+        "wires": [
+            [
+                "ccn_db_resolve"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_db_resolve",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "",
+        "x": 970,
+        "y": 160,
+        "wires": [
+            [
+                "ccn_userids"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_userids",
+        "type": "function",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[4] extract userids",
+        "func": "// ============================================================\n// CC NOTIFY — [4] extract userids\n//\n// Runs on BOTH branches, before the saveToInbox switch.\n// Resolution happens ONCE and feeds both the ledger and the push,\n// so the two can never disagree about who the recipients were.\n// ============================================================\n\nconst rows = msg.payload;\n\nif (!Array.isArray(rows) || rows.length === 0) {\n  node.warn(\n    `CC NOTIFY: no active users matched mode \"${msg.selectMode}\" — ` +\n    `nothing saved, nothing sent for \"${msg.notif.title}\".`\n  );\n  return null;\n}\n\n// Kept on the message so step [7] can reuse them for the\n// subscription lookup. One resolution, two consumers.\nmsg.userIds = rows.map(row => row.recid).filter(id => id != null);\n\nif (msg.userIds.length === 0) {\n  node.warn('CC NOTIFY: resolve returned rows but no recid values — dropping.');\n  return null;\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1170,
+        "y": 160,
+        "wires": [
+            [
+                "ccn_switch_save"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_switch_save",
+        "type": "switch",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[5] save to inbox?",
+        "property": "saveToInbox",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "false"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 150,
+        "y": 360,
+        "wires": [
+            [
+                "ccn_rows"
+            ],
+            [
+                "ccn_subparams"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_rows",
+        "type": "function",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[6] build ledger rows",
+        "func": "// ============================================================\n// CC NOTIFY — [6] build ledger rows\n//\n// Skipped entirely when saveToInbox is off. Params only — the SQL\n// lives in the next template node.\n// ============================================================\n\nconst n = msg.notif;\n\n// (?,?,?,?,?),(?,?,?,?,?)...  one group per user.\n// The empty guard in [4] matters here: \"VALUES ;\" is a syntax error.\nmsg.rowPlaceholders = msg.userIds.map(() => '(?,?,?,?,?)').join(',');\n\nmsg.payload = msg.userIds.reduce(\n  (params, userId) => params.concat([\n    userId, n.title, n.body, n.url, n.tag\n  ]),\n  []\n);\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 320,
+        "wires": [
+            [
+                "ccn_sql_insert"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_sql_insert",
+        "type": "template",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[6] save notification",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "INSERT INTO user_notifications\n  (userid, title, body, url, tag)\nVALUES {{{rowPlaceholders}}};",
+        "output": "str",
+        "x": 720,
+        "y": 320,
+        "wires": [
+            [
+                "ccn_db_insert"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_db_insert",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "",
+        "x": 950,
+        "y": 320,
+        "wires": [
+            [
+                "ccn_subparams"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_subparams",
+        "type": "function",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[7] subscription params",
+        "func": "// ============================================================\n// CC NOTIFY — [7] subscription lookup params\n//\n// Both branches land here. If the ledger was written, everything\n// from this point is best-effort — push can fail entirely and the\n// user still sees the notification when they open the app.\n//\n// Because step [4] already resolved userids, this is ONE query\n// with no user-table join and no role clause.\n// ============================================================\n\nmsg.placeholders = msg.userIds.map(() => '?').join(',');\nmsg.payload = msg.userIds;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1190,
+        "y": 360,
+        "wires": [
+            [
+                "ccn_sql_subs"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_sql_subs",
+        "type": "template",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[8] find devices",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "SELECT DISTINCT ps.subscription\nFROM push_subscriptions ps\nWHERE ps.active = 'y'\nAND ps.userid IN ({{{placeholders}}});",
+        "output": "str",
+        "x": 160,
+        "y": 520,
+        "wires": [
+            [
+                "ccn_db_subs"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_db_subs",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "",
+        "x": 390,
+        "y": 520,
+        "wires": [
+            [
+                "ccn_shape"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_shape",
+        "type": "function",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[9] shape subscriptions",
+        "func": "// ============================================================\n// CC NOTIFY — [9] shape subscriptions for web-push\n// ============================================================\n\nconst rows = msg.payload;\n\nif (!Array.isArray(rows) || rows.length === 0) {\n  // Not an error. If the ledger ran, this is exactly the case it\n  // exists for — saved, but nobody has a live device.\n  node.warn(\n    `CC NOTIFY: \"${msg.notif.title}\" resolved to ${msg.userIds.length} user(s), ` +\n    `but no active subscriptions — no push sent.`\n  );\n  return null;\n}\n\nmsg.subscriptions = rows.map(row => {\n  const sub = typeof row.subscription === 'string'\n    ? JSON.parse(row.subscription)\n    : row.subscription;\n  return {\n    endpoint: sub.endpoint,\n    keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }\n  };\n});\n\nmsg.notification = {\n  title: msg.notif.title || 'Notification',\n  body:  msg.notif.body  || '',\n  url:   msg.notif.url   || './home',\n  tag:   msg.notif.tag   || 'notification'\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 640,
+        "y": 520,
+        "wires": [
+            [
+                "ccn_push"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_push",
+        "type": "web-push",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[10] push",
+        "vapidConfiguration": "5c8d89bb02db35a6",
+        "x": 900,
+        "y": 520,
+        "wires": [
+            [
+                "ccn_dead"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_dead",
+        "type": "function",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[11] deactivate dead",
+        "func": "// ============================================================\n// CC NOTIFY — [11] deactivate dead endpoints\n// ============================================================\n\nconst failedList = msg.payload.failed || [];\nif (failedList.length === 0) return null;\n\nconst sentEndpoints = new Set(\n  (msg.payload.sent || []).map(s => s.endpoint).filter(Boolean)\n);\n\nconst deadEndpoints = (msg.subscriptions || [])\n  .map(s => s.endpoint)\n  .filter(ep => ep && !sentEndpoints.has(ep));\n\n// If the diff doesn't match the failure count, our assumption that\n// sent/failed are disjoint subsets is wrong. Bail rather than\n// deactivate the wrong rows.\nif (deadEndpoints.length !== failedList.length) {\n  node.warn(\n    `CC NOTIFY: endpoint diff mismatch — ${deadEndpoints.length} unaccounted ` +\n    `vs ${failedList.length} failed. Not deactivating.`\n  );\n  return null;\n}\n\nnode.warn(`CC NOTIFY: deactivating ${deadEndpoints.length} dead subscription(s).`);\n\nmsg.placeholders = deadEndpoints.map(() => '?').join(',');\nmsg.payload = deadEndpoints;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1120,
+        "y": 520,
+        "wires": [
+            [
+                "ccn_sql_dead"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_sql_dead",
+        "type": "template",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "[12] deactivate",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "UPDATE push_subscriptions\nSET active = 'n'\nWHERE JSON_UNQUOTE(JSON_EXTRACT(subscription, '$.endpoint')) IN ({{{placeholders}}});",
+        "output": "str",
+        "x": 1340,
+        "y": 520,
+        "wires": [
+            [
+                "ccn_db_dead"
+            ]
+        ]
+    },
+    {
+        "id": "ccn_db_dead",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "cc7f1a2b3c4d5e60",
+        "name": "",
+        "x": 1560,
+        "y": 520,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5c8d89bb02db35a6",
+        "type": "vapid-configuration",
+        "subject": "mailto:leneomkar@gmail.com",
+        "publicKey": "BAxegrMG5z4zm_2ZJz-0gsPlCpSj3bt097ecQERZxdyEX-57t6I-oc_Iel_UXiAUWH8rx1NCTbp0wMRmPa5n3ao",
+        "privateKey": "9ZtFkX9B8wOQ8ybPbpdGyOoSgRROxuJ3l1_R23XwiDs",
+        "gcmApiKey": "",
+        "timeout": "0",
+        "name": ""
+    },
+    {
         "id": "5c7279e5fed154c8",
         "type": "subflow",
         "name": "VALIDATOR",
@@ -65,7 +654,7 @@
         "type": "function",
         "z": "5c7279e5fed154c8",
         "name": "validate",
-        "func": "// ====================================================\n// VALIDATOR MIDDLEWARE\n// Set msg.schema before this node.\n//\n// Outputs:\n//   1 → Form redirect (302)        → wire to http response\n//   2 → Fetch error (400 JSON)     → wire to http response\n//   3 → Valid payload              → go to business logic\n// ====================================================\n\n// ─────────────────────────────────────────────\n// TYPE VALIDATORS\n// ─────────────────────────────────────────────\n\nfunction validateString(field, val, rules, errors) {\n    val = String(val).trim();\n    if (/<[^>]*>/.test(val)) {\n        errors.push({ field, message: rules.messages?.html || `${field} contains invalid characters` });\n        return null;\n    }\n    if (rules.minLen && val.length < rules.minLen)\n        errors.push({ field, message: rules.messages?.minLen || `${field} must be at least ${rules.minLen} characters` });\n    if (rules.maxLen && val.length > rules.maxLen)\n        errors.push({ field, message: rules.messages?.maxLen || `${field} exceeds max length of ${rules.maxLen}` });\n    if (rules.pattern && !new RegExp(rules.pattern).test(val))\n        errors.push({ field, message: rules.messages?.pattern || `${field} has an invalid format` });\n    return val;\n}\n\nfunction validateNumber(field, val, rules, errors) {\n    if (rules.pattern && !new RegExp(rules.pattern).test(String(val))) {\n        errors.push({ field, message: rules.messages?.pattern || `${field} has an invalid format` });\n        return null;\n    }\n    val = Number(val);\n    if (isNaN(val)) {\n        errors.push({ field, message: rules.messages?.type || `${field} must be a number` });\n        return null;\n    }\n    if (rules.min !== undefined && val < rules.min)\n        errors.push({ field, message: rules.messages?.min || `${field} must be at least ${rules.min}` });\n    if (rules.max !== undefined && val > rules.max)\n        errors.push({ field, message: rules.messages?.max || `${field} must be at most ${rules.max}` });\n    if (rules.precision !== undefined)\n        val = parseFloat(val.toFixed(rules.precision));\n    return val;\n}\n\nfunction validateBoolean(field, val, rules, errors) {\n    if (val === true || val === 'true' || val === 1 || val === '1' || val === 'on') return true;\n    if (val === false || val === 'false' || val === 0 || val === '0' || val === 'off') return false;\n    errors.push({ field, message: rules.messages?.type || `${field} must be a boolean` });\n    return null;\n}\n\nfunction validateDate(field, val, rules, errors) {\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(val) || isNaN(Date.parse(val))) {\n        errors.push({ field, message: rules.messages?.type || `${field} must be a valid date (YYYY-MM-DD)` });\n        return null;\n    }\n    return val;\n}\n\nfunction validateAllowedValues(field, val, rules, errors) {\n    if (rules.allowedValues && !rules.allowedValues.includes(val)) {\n        errors.push({ field, message: rules.messages?.allowedValues || `${field} has an invalid value` });\n        return null;\n    }\n    return val;\n}\n\nfunction buildRowMessages(rules, row) {\n    if (!rules.messages) return {};\n    const out = {};\n    for (const [k, v] of Object.entries(rules.messages)) out[k] = `${v} ${row}`;\n    return out;\n}\n\nfunction validateArrayItem(field, item, idx, itemSchema, errors, strictItems) {\n    const cleaned = {};\n    const row = `in row ${idx + 1}`;\n\n    if (strictItems) {\n        for (const key of Object.keys(item)) {\n            if (!(key in itemSchema))\n                errors.push({ field: `${field}[${idx}].${key}`, message: `Unknown field: ${key} ${row}` });\n        }\n    }\n\n    for (const [subField, subRules] of Object.entries(itemSchema)) {\n        let subVal = item[subField];\n        const key = `${field}[${idx}].${subField}`;\n        const rulesWithRowMsg = { ...subRules, messages: { ...subRules.messages, ...buildRowMessages(subRules, row) } };\n\n        if (subRules.required && (subVal === undefined || subVal === null || subVal === '')) {\n            errors.push({\n                field: key,\n                message: subRules.messages?.required\n                    ? `${subRules.messages.required} ${row}`\n                    : `${subField} is required ${row}`\n            });\n            continue;\n        }\n        if (subVal === undefined || subVal === null || subVal === '') continue;\n\n        if (subRules.type === 'string') subVal = validateString(key, subVal, rulesWithRowMsg, errors);\n        if (subRules.type === 'number') subVal = validateNumber(key, subVal, rulesWithRowMsg, errors);\n        if (subRules.type === 'boolean') subVal = validateBoolean(key, subVal, rulesWithRowMsg, errors);\n        if (subRules.type === 'date') subVal = validateDate(key, subVal, rulesWithRowMsg, errors);\n\n        if (subVal !== null && subVal !== undefined && subRules.allowedValues)\n            subVal = validateAllowedValues(key, subVal, rulesWithRowMsg, errors);\n\n        if (subVal !== null && subVal !== undefined) cleaned[subField] = subVal;\n    }\n    return cleaned;\n}\n\nfunction validateArray(field, val, rules, errors, strictItems) {\n    if (!Array.isArray(val)) {\n        errors.push({ field, message: rules.messages?.type || `${field} must be an array` });\n        return null;\n    }\n    if (rules.minItems && val.length < rules.minItems) {\n        errors.push({ field, message: rules.messages?.minItems || `${field} must have at least ${rules.minItems} item(s)` });\n        return null;\n    }\n    if (rules.maxItems && val.length > rules.maxItems) {\n        errors.push({ field, message: rules.messages?.maxItems || `${field} must have at most ${rules.maxItems} item(s)` });\n        return null;\n    }\n    if (!rules.itemSchema) return val;\n    return val.map((item, idx) => validateArrayItem(field, item, idx, rules.itemSchema, errors, strictItems));\n}\n\n\n// ─────────────────────────────────────────────\n// MAIN\n// ─────────────────────────────────────────────\n\nconst SCHEMA = msg.schema;\nconst isFetchRequest = msg.isFetchRequest;   // set by AUTH_MIDDLEWARE\n\nif (!SCHEMA || typeof SCHEMA !== 'object') {\n    msg.statusCode = 500;\n    msg.payload = { success: false, errors: [{ field: null, message: 'Server error: schema not defined' }] };\n    return [null, msg, null];   // Output 2 (fetch-style — server fault, not form fault)\n}\n\nconst data = msg.payload;\n\nif (!data || typeof data !== 'object' || Array.isArray(data)) {\n    msg.statusCode = 400;\n    msg.payload = { success: false, errors: [{ field: null, message: 'Invalid request body' }] };\n    return [null, msg, null];   // Output 2\n}\n\nconst errors = [];\nconst cleaned = {};\n\nconst isStrict = SCHEMA._strict !== false;\nconst isStrictItems = SCHEMA._strictItems !== false;\n\n// Unknown field rejection (top level)\nif (isStrict) {\n    const reservedKeys = new Set(['_strict', '_strictItems']);\n    for (const key of Object.keys(data)) {\n        if (!reservedKeys.has(key) && !(key in SCHEMA))\n            errors.push({ field: key, message: `Unknown field: ${key}` });\n    }\n}\n\n// Field loop\nfor (const [field, rules] of Object.entries(SCHEMA)) {\n    if (field === '_strict' || field === '_strictItems') continue;\n\n    let val = data[field];\n\n    if (rules.required && (val === undefined || val === null || val === '')) {\n        errors.push({ field, message: rules.messages?.required || `${field} is required` });\n        continue;\n    }\n    if (val === undefined || val === null || val === '') continue;\n\n    if (rules.type === 'string') val = validateString(field, val, rules, errors);\n    if (rules.type === 'number') val = validateNumber(field, val, rules, errors);\n    if (rules.type === 'boolean') val = validateBoolean(field, val, rules, errors);\n    if (rules.type === 'date') val = validateDate(field, val, rules, errors);\n    if (rules.type === 'array') val = validateArray(field, val, rules, errors, isStrictItems);\n\n    if (val !== null && val !== undefined && rules.type !== 'array' && rules.allowedValues)\n        val = validateAllowedValues(field, val, rules, errors);\n\n    if (val !== null && val !== undefined) cleaned[field] = val;\n}\n\n// ─────────────────────────────────────────────\n// RESPOND\n// ─────────────────────────────────────────────\n\nif (errors.length > 0) {\n    msg.statusCode = 400;\n\n    if (!isFetchRequest) {\n        // Output 1 → Form redirect with errors in query string\n        const errorParam = encodeURIComponent(JSON.stringify(errors));\n        const path = msg.errorRedirectPath || '/app/home';\n        msg.statusCode = 302;\n        msg.headers = { Location: `${path}?errors=${errorParam}` };\n        msg.payload = 'Redirecting...';\n        return [msg, null, null];\n    }\n\n    // Output 2 → Fetch JSON error\n    msg.payload = { success: false, errors };\n    return [null, msg, null];\n}\n\n// Output 3 → Valid\nmsg.payload = cleaned;\nreturn [null, null, msg];",
+        "func": "// ====================================================\n// VALIDATOR MIDDLEWARE\n// Set msg.schema before this node.\n//\n// Outputs:\n//   1 → Form redirect (302)        → wire to http response\n//   2 → Fetch error (400 JSON)     → wire to http response\n//   3 → Valid payload              → go to business logic\n// ====================================================\n\n// ─────────────────────────────────────────────\n// TYPE VALIDATORS\n// ─────────────────────────────────────────────\n\n\n\nfunction validateString(field, val, rules, errors) {\n    val = String(val).trim();\n    if (/<[^>]*>/.test(val)) {\n        errors.push({ field, message: rules.messages?.html || `${field} contains invalid characters` });\n        return null;\n    }\n    if (rules.minLen && val.length < rules.minLen)\n        errors.push({ field, message: rules.messages?.minLen || `${field} must be at least ${rules.minLen} characters` });\n    if (rules.maxLen && val.length > rules.maxLen)\n        errors.push({ field, message: rules.messages?.maxLen || `${field} exceeds max length of ${rules.maxLen}` });\n    if (rules.pattern && !new RegExp(rules.pattern).test(val))\n        errors.push({ field, message: rules.messages?.pattern || `${field} has an invalid format` });\n    return val;\n}\n\nfunction validateNumber(field, val, rules, errors) {\n    if (rules.pattern && !new RegExp(rules.pattern).test(String(val))) {\n        errors.push({ field, message: rules.messages?.pattern || `${field} has an invalid format` });\n        return null;\n    }\n    val = Number(val);\n    if (isNaN(val)) {\n        errors.push({ field, message: rules.messages?.type || `${field} must be a number` });\n        return null;\n    }\n    if (rules.min !== undefined && val < rules.min)\n        errors.push({ field, message: rules.messages?.min || `${field} must be at least ${rules.min}` });\n    if (rules.max !== undefined && val > rules.max)\n        errors.push({ field, message: rules.messages?.max || `${field} must be at most ${rules.max}` });\n    if (rules.precision !== undefined)\n        val = parseFloat(val.toFixed(rules.precision));\n    return val;\n}\n\nfunction validateBoolean(field, val, rules, errors) {\n    if (val === true || val === 'true' || val === 1 || val === '1' || val === 'on') return true;\n    if (val === false || val === 'false' || val === 0 || val === '0' || val === 'off') return false;\n    errors.push({ field, message: rules.messages?.type || `${field} must be a boolean` });\n    return null;\n}\n\nfunction validateDate(field, val, rules, errors) {\n    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(val) || isNaN(Date.parse(val))) {\n        errors.push({ field, message: rules.messages?.type || `${field} must be a valid date (YYYY-MM-DD)` });\n        return null;\n    }\n    return val;\n}\n\nfunction validateAllowedValues(field, val, rules, errors) {\n    if (rules.allowedValues && !rules.allowedValues.includes(val)) {\n        errors.push({ field, message: rules.messages?.allowedValues || `${field} has an invalid value` });\n        return null;\n    }\n    return val;\n}\n\nfunction buildRowMessages(rules, row) {\n    if (!rules.messages) return {};\n    const out = {};\n    for (const [k, v] of Object.entries(rules.messages)) out[k] = `${v} ${row}`;\n    return out;\n}\n\nfunction validateArrayItem(field, item, idx, itemSchema, errors, strictItems) {\n    const cleaned = {};\n    const row = `in row ${idx + 1}`;\n\n    if (strictItems) {\n        for (const key of Object.keys(item)) {\n            if (!(key in itemSchema))\n                errors.push({ field: `${field}[${idx}].${key}`, message: `Unknown field: ${key} ${row}` });\n        }\n    }\n\n    for (const [subField, subRules] of Object.entries(itemSchema)) {\n        let subVal = item[subField];\n        const key = `${field}[${idx}].${subField}`;\n        const rulesWithRowMsg = { ...subRules, messages: { ...subRules.messages, ...buildRowMessages(subRules, row) } };\n\n        if (subRules.required && (subVal === undefined || subVal === null || subVal === '')) {\n            errors.push({\n                field: key,\n                message: subRules.messages?.required\n                    ? `${subRules.messages.required} ${row}`\n                    : `${subField} is required ${row}`\n            });\n            continue;\n        }\n        if (subVal === undefined || subVal === null || subVal === '') continue;\n\n        if (subRules.type === 'string') subVal = validateString(key, subVal, rulesWithRowMsg, errors);\n        if (subRules.type === 'number') subVal = validateNumber(key, subVal, rulesWithRowMsg, errors);\n        if (subRules.type === 'boolean') subVal = validateBoolean(key, subVal, rulesWithRowMsg, errors);\n        if (subRules.type === 'date') subVal = validateDate(key, subVal, rulesWithRowMsg, errors);\n\n        if (subVal !== null && subVal !== undefined && subRules.allowedValues)\n            subVal = validateAllowedValues(key, subVal, rulesWithRowMsg, errors);\n\n        if (subVal !== null && subVal !== undefined) cleaned[subField] = subVal;\n    }\n    return cleaned;\n}\n\nfunction validateArray(field, val, rules, errors, strictItems) {\n    if (!Array.isArray(val)) {\n        errors.push({ field, message: rules.messages?.type || `${field} must be an array` });\n        return null;\n    }\n    if (rules.minItems && val.length < rules.minItems) {\n        errors.push({ field, message: rules.messages?.minItems || `${field} must have at least ${rules.minItems} item(s)` });\n        return null;\n    }\n    if (rules.maxItems && val.length > rules.maxItems) {\n        errors.push({ field, message: rules.messages?.maxItems || `${field} must have at most ${rules.maxItems} item(s)` });\n        return null;\n    }\n    if (!rules.itemSchema) return val;\n    return val.map((item, idx) => validateArrayItem(field, item, idx, rules.itemSchema, errors, strictItems));\n}\n\n\n// ─────────────────────────────────────────────\n// MAIN\n// ─────────────────────────────────────────────\n\nconst SCHEMA = msg.schema;\nconst isFetchRequest = msg.isFetchRequest;   // set by AUTH_MIDDLEWARE\n\nif (!SCHEMA || typeof SCHEMA !== 'object') {\n    msg.statusCode = 500;\n    msg.payload = { success: false, errors: [{ field: null, message: 'Server error: schema not defined' }] };\n    return [null, msg, null];   // Output 2 (fetch-style — server fault, not form fault)\n}\n\nconst data = msg.payload;\nnode.warn(data);\n\nif (!data || typeof data !== 'object' || Array.isArray(data)) {\n    msg.statusCode = 400;\n    msg.payload = { success: false, errors: [{ field: null, message: 'Invalid request body' }] };\n    return [null, msg, null];   // Output 2\n}\n\nconst errors = [];\nconst cleaned = {};\n\nconst isStrict = SCHEMA._strict !== false;\nconst isStrictItems = SCHEMA._strictItems !== false;\n\n// Unknown field rejection (top level)\nif (isStrict) {\n    const reservedKeys = new Set(['_strict', '_strictItems']);\n    for (const key of Object.keys(data)) {\n        if (!reservedKeys.has(key) && !(key in SCHEMA))\n            errors.push({ field: key, message: `Unknown field: ${key}` });\n    }\n}\n\n// Field loop\nfor (const [field, rules] of Object.entries(SCHEMA)) {\n    if (field === '_strict' || field === '_strictItems') continue;\n\n    let val = data[field];\n\n    if (rules.required && (val === undefined || val === null || val === '')) {\n        errors.push({ field, message: rules.messages?.required || `${field} is required` });\n        continue;\n    }\n    if (val === undefined || val === null || val === '') continue;\n\n    if (rules.type === 'string') val = validateString(field, val, rules, errors);\n    if (rules.type === 'number') val = validateNumber(field, val, rules, errors);\n    if (rules.type === 'boolean') val = validateBoolean(field, val, rules, errors);\n    if (rules.type === 'date') val = validateDate(field, val, rules, errors);\n    if (rules.type === 'array') val = validateArray(field, val, rules, errors, isStrictItems);\n\n    if (val !== null && val !== undefined && rules.type !== 'array' && rules.allowedValues)\n        val = validateAllowedValues(field, val, rules, errors);\n\n    if (val !== null && val !== undefined) cleaned[field] = val;\n}\n\n// ─────────────────────────────────────────────\n// RESPOND\n// ─────────────────────────────────────────────\n\nif (errors.length > 0) {\n    msg.statusCode = 400;\n\n    if (!isFetchRequest) {\n        // Output 1 → Form redirect with errors in query string\n        const errorParam = encodeURIComponent(JSON.stringify(errors));\n        const path = msg.errorRedirectPath || '/app/home';\n        msg.statusCode = 302;\n        msg.headers = { Location: `${path}?errors=${errorParam}` };\n        msg.payload = 'Redirecting...';\n        return [msg, null, null];\n    }\n\n    // Output 2 → Fetch JSON error\n    msg.payload = { success: false, errors };\n    return [null, msg, null];\n}\n\n// Output 3 → Valid\nmsg.payload = cleaned;\nreturn [null, null, msg];",
         "outputs": 3,
         "timeout": "",
         "noerr": 0,
@@ -188,6 +777,426 @@
         ]
     },
     {
+        "id": "cb85b1c398c1c3ab",
+        "type": "subflow",
+        "name": "DB NODE ",
+        "info": "",
+        "category": "",
+        "in": [
+            {
+                "x": 200,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "6ff257df642fe4ce"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 740,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "e6110207264b09a5",
+                        "port": 0
+                    },
+                    {
+                        "id": "1d13544cecdbbcc8",
+                        "port": 0
+                    }
+                ]
+            }
+        ],
+        "env": [],
+        "meta": {},
+        "color": "#DDAA99"
+    },
+    {
+        "id": "6ff257df642fe4ce",
+        "type": "delay",
+        "z": "cb85b1c398c1c3ab",
+        "name": "",
+        "pauseType": "rate",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "30",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 380,
+        "y": 40,
+        "wires": [
+            [
+                "e6110207264b09a5"
+            ]
+        ]
+    },
+    {
+        "id": "e6110207264b09a5",
+        "type": "mysql",
+        "z": "cb85b1c398c1c3ab",
+        "mydb": "8af565446e8ba893",
+        "name": "DB_CONFIG",
+        "x": 610,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1d13544cecdbbcc8",
+        "type": "catch",
+        "z": "cb85b1c398c1c3ab",
+        "name": "",
+        "scope": [
+            "e6110207264b09a5"
+        ],
+        "uncaught": false,
+        "x": 610,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "8af565446e8ba893",
+        "type": "MySQLdatabase",
+        "name": "DB CONFIG ",
+        "host": "${DB_HOST}",
+        "port": "3306",
+        "db": "${DB_DBNAME}",
+        "tz": "",
+        "charset": "UTF8"
+    },
+    {
+        "id": "d15be7953debce86",
+        "type": "subflow",
+        "name": "RBAC_MIDDLEWARE",
+        "info": "Role-Based Access Control middleware.\n\nWire AUTH_MIDDLEWARE output 3 → into this subflow.\n\nSet ALLOWED_ROLES on each instance:\n  admin                  → admin only\n  admin,manager          → admin + manager\n  admin,manager,operator → all roles\n\nOutputs:\n  1 → Authorised           → go to template / DB\n  2 → Fetch denied (403)   → wire to http response\n  3 → Browser denied (302) → wire to http response",
+        "category": "",
+        "in": [
+            {
+                "x": 120,
+                "y": 120,
+                "wires": [
+                    {
+                        "id": "367062aa4b99f0e3"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 700,
+                "y": 200,
+                "wires": [
+                    {
+                        "id": "367062aa4b99f0e3",
+                        "port": 2
+                    }
+                ]
+            }
+        ],
+        "env": [
+            {
+                "name": "ALLOWED_ROLES",
+                "type": "str",
+                "value": "admin,manager,supervisor",
+                "ui": {
+                    "label": {
+                        "en-US": "Allowed Roles (comma-separated)"
+                    },
+                    "type": "input",
+                    "opts": {
+                        "types": [
+                            "str"
+                        ]
+                    }
+                }
+            }
+        ],
+        "meta": {},
+        "color": "#F0A500"
+    },
+    {
+        "id": "367062aa4b99f0e3",
+        "type": "function",
+        "z": "d15be7953debce86",
+        "name": "RBAC Logic Multi Role ",
+        "func": "// ====================================================\n// RBAC MIDDLEWARE\n// Output 1 → Failure  (form/browser)  → http\n// Output 2 → Failure  (fetch)         → http\n// Output 3 → Authorised               → output 1\n// ====================================================\n\nconst allowedRolesRaw = env.get('ALLOWED_ROLES') || '';\nconst isProd = env.get('TYPE') === 'prod';\n\nconst allowedRoles = allowedRolesRaw\n    .split(',')\n    .map(r => r.trim().toLowerCase())\n    .filter(Boolean);\n\nconst userDetails    = msg.userDetails;\nconst isFetchRequest = msg.isFetchRequest;\n\nconst rawRole = userDetails?.userrole;\n\nlet userRoles = [];\n\nif (Array.isArray(rawRole)) {\n    userRoles = rawRole;\n}\nelse if (typeof rawRole === 'string') {\n\n    try {\n\n        // JSON array string\n        if (rawRole.trim().startsWith('[')) {\n            userRoles = JSON.parse(rawRole);\n        }\n\n        // comma separated string\n        else {\n            userRoles = rawRole.split(',');\n        }\n\n    } catch (err) {\n\n        // fallback single role\n        userRoles = [rawRole];\n\n    }\n}\n\nuserRoles = userRoles\n    .map(r => String(r).trim().toLowerCase())\n    .filter(Boolean);\n\nconst userRole = userRoles[0];\n\n// --------------------------------------------------\n// Safety check — userDetails missing or no roles\n// --------------------------------------------------\nif (!userDetails || !userRoles.length) {\n    node.warn('RBAC: msg.userDetails missing or userrole empty — check AUTH_MIDDLEWARE is wired');\n\n    if (isFetchRequest) {\n        msg.statusCode = 401;\n        msg.payload    = { success: false, message: 'Not authenticated' };\n        return [null, msg, null];        // Output 2 → fetch failure\n    }\n\n    msg.statusCode = 302;\n    msg.headers    = { Location: './login' };\n    msg.payload    = 'Redirecting...';\n    return [msg, null, null];            // Output 1 → browser failure\n}\n\n// --------------------------------------------------\n// Role check\n// --------------------------------------------------\nconst isAuthorised = userRoles.some(r => allowedRoles.includes(r));\n\nif (isAuthorised) {\n    msg.rbac = {\n        authorised:   true,\n        userRoles:    userRoles,\n        allowedRoles: allowedRoles,\n    };\n    return [null, null, msg];            // Output 3 → all ok\n}\n\n// --------------------------------------------------\n// Denied — build audit log\n// --------------------------------------------------\nnode.warn(\n    `RBAC DENY | userId=${userDetails.userId} | roles=[${userRoles.join(',')}] | ` +\n    `allowed=[${allowedRoles.join(',')}] | path=${msg.req?.url} | ` +\n    `ip=${msg.req?.ip || msg.req?.headers?.['x-forwarded-for'] || null}`\n);\n\nmsg.auditLog = {\n    event:        'ACCESS_DENIED',\n    timestamp:    new Date().toISOString(),\n    userId:       userDetails.userId   || null,\n    userName:     userDetails.name     || null,\n    userRoles:    userRoles,\n    path:         msg.req?.url         || null,\n    method:       msg.req?.method      || null,\n    allowedRoles: allowedRoles,\n    ip:           msg.req?.ip          || msg.req?.headers?.['x-forwarded-for'] || null,\n    userAgent:    msg.req?.headers?.['user-agent'] || null,\n};\n\nif (isFetchRequest) {\n    msg.statusCode = 403;\n    msg.payload    = {\n        success: false,\n        message: 'You do not have permission to access this resource.'\n    };\n    return [null, msg, null];            // Output 2 → fetch failure\n}\n\nmsg.statusCode = 302;\nmsg.headers    = { Location: './unauthorized' };\nmsg.payload    = 'Redirecting...';\nreturn [msg, null, null];                // Output 1 → browser failure",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 120,
+        "wires": [
+            [
+                "d5ab708f2bbe4ebc",
+                "0aefab7b0797ce84"
+            ],
+            [
+                "d5ab708f2bbe4ebc",
+                "b3bd5cba75517c80"
+            ],
+            [
+                "be2ad8453f346721"
+            ]
+        ]
+    },
+    {
+        "id": "d5ab708f2bbe4ebc",
+        "type": "http response",
+        "z": "d15be7953debce86",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 730,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "0aefab7b0797ce84",
+        "type": "debug",
+        "z": "d15be7953debce86",
+        "name": "debug 564",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1210,
+        "y": 60,
+        "wires": []
+    },
+    {
+        "id": "b3bd5cba75517c80",
+        "type": "debug",
+        "z": "d15be7953debce86",
+        "name": "debug 565",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1210,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "be2ad8453f346721",
+        "type": "debug",
+        "z": "d15be7953debce86",
+        "name": "debug 566",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1210,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "e5691b9631aecba4",
+        "type": "function",
+        "z": "d15be7953debce86",
+        "name": "RBAC Logic",
+        "func": "// ====================================================\n// RBAC MIDDLEWARE\n// Reads msg.isFetchRequest set by AUTH_MIDDLEWARE.\n//\n// Set ALLOWED_ROLES on each subflow instance:\n//   admin                  → admin only\n//   admin,manager          → admin + manager\n//   admin,manager,operator → all roles\n//\n// Outputs:\n//   1 → Form redirect (302)        → wire to http response\n//   2 → Fetch denied (403 JSON)    → wire to http response\n//   3 → Authorised                 → go to template / DB\n// ====================================================\n\n// --------------------------------------------------\n// 1. Read allowed roles\n// --------------------------------------------------\nconst allowedRolesRaw = env.get('ALLOWED_ROLES') || '';\n\nconst allowedRoles = allowedRolesRaw\n    .split(',')\n    .map(r => r.trim().toLowerCase())\n    .filter(Boolean);\n\n// --------------------------------------------------\n// 2. Pull user details from AUTH_MIDDLEWARE\n// --------------------------------------------------\nconst userDetails    = msg.userDetails;\nconst userRole       = userDetails?.userrole?.toLowerCase();\nconst isFetchRequest = msg.isFetchRequest;\n\n// --------------------------------------------------\n// 3. Safety check — userDetails missing\n// --------------------------------------------------\nif (!userDetails || !userRole) {\n    node.warn('RBAC: msg.userDetails missing — check AUTH_MIDDLEWARE is wired to output 3');\n\n    if (isFetchRequest) {\n        msg.statusCode = 401;\n        msg.payload    = { success: false, message: 'Not authenticated' };\n        return [null, msg, null];    // Output 2\n    }\n\n    msg.statusCode = 302;\n    msg.headers    = { Location: './login' };\n    msg.payload    = 'Redirecting...';\n    return [msg, null, null];        // Output 1\n}\n\n// --------------------------------------------------\n// 4. Role check\n// --------------------------------------------------\nconst isAuthorised = allowedRoles.includes(userRole);\n\nif (isAuthorised) {\n    msg.rbac = {\n        authorised:   true,\n        userRole:     userRole,\n        allowedRoles: allowedRoles,\n    };\n    return [null, null, msg];        // Output 3 — authorised\n}\n\n// --------------------------------------------------\n// 5. Denied — build audit log\n// --------------------------------------------------\nnode.warn(\n    `RBAC DENY | userId=${userDetails.userId} | role=${userRole} | ` +\n    `allowed=[${allowedRoles.join(',')}] | path=${msg.req?.url}`\n);\n\nmsg.auditLog = {\n    event:        'ACCESS_DENIED',\n    timestamp:    new Date().toISOString(),\n    userId:       userDetails.userId   || null,\n    userName:     userDetails.name     || null,\n    userRole:     userRole,\n    path:         msg.req?.url         || null,\n    method:       msg.req?.method      || null,\n    allowedRoles: allowedRoles,\n    ip:           msg.req?.ip          || msg.req?.headers?.['x-forwarded-for'] || null,\n    userAgent:    msg.req?.headers?.['user-agent'] || null,\n};\n\n// --------------------------------------------------\n// 6. Respond — fetch vs browser\n// --------------------------------------------------\nif (isFetchRequest) {\n    msg.statusCode = 403;\n    msg.payload    = {\n        success: false,\n        message: 'You do not have permission to access this resource.'\n    };\n    return [null, msg, null];        // Output 2\n}\n\nmsg.statusCode = 302;\nmsg.headers    = { Location: './unauthorized' };\nmsg.payload    = 'Redirecting...';\nreturn [msg, null, null];            // Output 1",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 60,
+        "wires": [
+            [],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "15f95294edd72fe0",
+        "type": "function",
+        "z": "d15be7953debce86",
+        "name": "function 194",
+        "func": "// ====================================================\n// RBAC MIDDLEWARE\n// Output 1 → Failure  (form/browser)  → http\n// Output 2 → Failure  (fetch)         → http\n// Output 3 → Authorised               → output 1\n// ====================================================\n\nconst allowedRolesRaw = env.get('ALLOWED_ROLES') || '';\nconst isProd = env.get('TYPE') === 'prod';\n\nconst allowedRoles = allowedRolesRaw\n    .split(',')\n    .map(r => r.trim().toLowerCase())\n    .filter(Boolean);\n\nconst userDetails    = msg.userDetails;\nconst isFetchRequest = msg.isFetchRequest;\n\nconst rawRole   = userDetails?.userrole;\nconst userRoles = (Array.isArray(rawRole) ? rawRole : [rawRole])\n    .map(r => r?.trim().toLowerCase())\n    .filter(Boolean);\n\nconst userRole = userRoles[0];\n\n// --------------------------------------------------\n// Safety check — userDetails missing or no roles\n// --------------------------------------------------\nif (!userDetails || !userRoles.length) {\n    node.warn('RBAC: msg.userDetails missing or userrole empty — check AUTH_MIDDLEWARE is wired');\n\n    if (isFetchRequest) {\n        msg.statusCode = 401;\n        msg.payload    = { success: false, message: 'Not authenticated' };\n        return [null, msg, null];        // Output 2 → fetch failure\n    }\n\n    msg.statusCode = 302;\n    msg.headers    = { Location: './login' };\n    msg.payload    = 'Redirecting...';\n    return [msg, null, null];            // Output 1 → browser failure\n}\n\n// --------------------------------------------------\n// Role check\n// --------------------------------------------------\nconst isAuthorised = userRoles.some(r => allowedRoles.includes(r));\n\nif (isAuthorised) {\n    msg.rbac = {\n        authorised:   true,\n        userRoles:    userRoles,\n        allowedRoles: allowedRoles,\n    };\n    return [null, null, msg];            // Output 3 → all ok\n}\n\n// --------------------------------------------------\n// Denied — build audit log\n// --------------------------------------------------\nnode.warn(\n    `RBAC DENY | userId=${userDetails.userId} | roles=[${userRoles.join(',')}] | ` +\n    `allowed=[${allowedRoles.join(',')}] | path=${msg.req?.url} | ` +\n    `ip=${msg.req?.ip || msg.req?.headers?.['x-forwarded-for'] || null}`\n);\n\nmsg.auditLog = {\n    event:        'ACCESS_DENIED',\n    timestamp:    new Date().toISOString(),\n    userId:       userDetails.userId   || null,\n    userName:     userDetails.name     || null,\n    userRoles:    userRoles,\n    path:         msg.req?.url         || null,\n    method:       msg.req?.method      || null,\n    allowedRoles: allowedRoles,\n    ip:           msg.req?.ip          || msg.req?.headers?.['x-forwarded-for'] || null,\n    userAgent:    msg.req?.headers?.['user-agent'] || null,\n};\n\nif (isFetchRequest) {\n    msg.statusCode = 403;\n    msg.payload    = {\n        success: false,\n        message: 'You do not have permission to access this resource.'\n    };\n    return [null, msg, null];            // Output 2 → fetch failure\n}\n\nmsg.statusCode = 302;\nmsg.headers    = { Location: './unauthorized' };\nmsg.payload    = 'Redirecting...';\nreturn [msg, null, null];                // Output 1 → browser failure",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5033a981a66d511a",
+        "type": "subflow",
+        "name": "AUTH_MIDDLEWARE",
+        "info": "",
+        "category": "",
+        "in": [
+            {
+                "x": 280,
+                "y": 100,
+                "wires": [
+                    {
+                        "id": "c92480a7cf58cbed"
+                    }
+                ]
+            }
+        ],
+        "out": [
+            {
+                "x": 600,
+                "y": 120,
+                "wires": [
+                    {
+                        "id": "c92480a7cf58cbed",
+                        "port": 2
+                    }
+                ]
+            }
+        ],
+        "env": [],
+        "meta": {},
+        "color": "#DDAA99"
+    },
+    {
+        "id": "c92480a7cf58cbed",
+        "type": "function",
+        "z": "5033a981a66d511a",
+        "name": "function 94",
+        "func": "// ===== Auth Middleware =====\n// Outputs:\n//   1 → Form redirect (302)       → wire to http response\n//   2 → Fetch denied (401 JSON)   → wire to http response\n//   3 → Authenticated             → go to RBAC / business logic\n\n// --------------------------------------------------\n// GET TOKENS FROM COOKIES\n// --------------------------------------------------\nconst loginToken = msg.req?.cookies?.loginToken;\nconst pinToken   = msg.req?.cookies?.pinToken;\n\nconst loginTokenMap = global.get('loginTokenMap') || new Map();\nconst pinTokenMap   = global.get('pinTokenMap')   || new Map();\n\nconst currentPath = msg.req?.url;\n\n// --------------------------------------------------\n// Detect Fetch / API Request\n// --------------------------------------------------\nconst isFetchRequest =\n    msg.req?.headers?.['x-requested-with'] === 'XMLHttpRequest' ||\n    msg.req?.headers?.accept?.includes('application/json');\n\nmsg.isFetchRequest = isFetchRequest;\n\n// --------------------------------------------------\n// INITIALIZE\n// --------------------------------------------------\nlet userDetails = null;\nlet redirectTo  = null;\n\n// --------------------------------------------------\n// VALIDATE TOKENS\n// --------------------------------------------------\nconst loginData = loginToken ? loginTokenMap.get(loginToken) : null;\nconst pinData   = pinToken   ? pinTokenMap.get(pinToken)     : null;\n\n// ==================================================\n// AUTH LOGIC\n// ==================================================\n\n/* 1. FULL LOGIN */\nif (loginData) {\n    userDetails = loginData;\n    if (currentPath === '/login' || currentPath === '/pin') {\n        redirectTo = '/home';\n    }\n}\n\n/* 2. PIN EXISTS — NOT FULLY LOGGED IN */\nelse if (pinData) {\n    if (currentPath === '/login' || currentPath === '/pin') {\n        // Allow through — Output 3\n        return [null, null, msg];\n    }\n    redirectTo = '/pin';\n}\n\n/* 3. NO TOKENS */\nelse {\n    if (currentPath === '/login') {\n        return [null, null, msg];\n    }\n    redirectTo = currentPath === '/pin' ? '/login' : '/login';\n}\n\n// ==================================================\n// HANDLE REDIRECT\n// ==================================================\nif (redirectTo) {\n\n    if (userDetails) {\n        msg.userDetails   = userDetails;\n        msg.isAuthenticated = true;\n    }\n\n    if (isFetchRequest) {\n        // Output 2 → Fetch denied\n        msg.statusCode = 401;\n        msg.payload = {\n            success:  false,\n            message:  'Authentication required',\n            redirect:'.' + redirectTo\n        };\n        return [null, msg, null];\n    } else {\n        // Output 1 → Form/browser redirect\n        msg.statusCode = 302;\n        msg.headers    = { Location: '.' + redirectTo };\n        msg.payload    = 'Redirecting...';\n        return [msg, null, null];\n    }\n}\n\n// ==================================================\n// AUTH SUCCESS — Output 3\n// ==================================================\nif (userDetails) {\n    msg.userDetails     = userDetails;\n    msg.isAuthenticated = true;\n    return [null, null, msg];\n}\n\n// ==================================================\n// SAFETY FALLBACK\n// ==================================================\nif (isFetchRequest) {\n    msg.statusCode = 401;\n    msg.payload    = { success: false, message: 'Unauthorized' };\n    return [null, msg, null];\n}\n\nmsg.statusCode = 302;\nmsg.headers    = { Location: './login' };\nmsg.payload    = 'Redirecting...';\nreturn [msg, null, null];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 100,
+        "wires": [
+            [
+                "0cf3e93c55e9708c",
+                "a12dd67a5735507c"
+            ],
+            [
+                "0cf3e93c55e9708c",
+                "48463ffb2df96c20"
+            ],
+            [
+                "f58adbd836ba488d"
+            ]
+        ]
+    },
+    {
+        "id": "0cf3e93c55e9708c",
+        "type": "http response",
+        "z": "5033a981a66d511a",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 630,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "a12dd67a5735507c",
+        "type": "debug",
+        "z": "5033a981a66d511a",
+        "name": "debug 462",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 610,
+        "y": 20,
+        "wires": []
+    },
+    {
+        "id": "48463ffb2df96c20",
+        "type": "debug",
+        "z": "5033a981a66d511a",
+        "name": "debug 549",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 770,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "f58adbd836ba488d",
+        "type": "debug",
+        "z": "5033a981a66d511a",
+        "name": "debug 550",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 570,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "f64d3a8bb679d1ea",
+        "type": "function",
+        "z": "5033a981a66d511a",
+        "name": "function 180",
+        "func": "// ===== Auth Middleware (3 Output Version) =====\n\n// --------------------------------------------------\n// GET TOKENS FROM COOKIES\n// --------------------------------------------------\nconst loginToken = msg.req?.cookies?.loginToken;\nconst pinToken = msg.req?.cookies?.pinToken;\n\nconst loginTokenMap = global.get('loginTokenMap') || new Map();\nconst pinTokenMap = global.get('pinTokenMap') || new Map();\n\nconst currentPath = msg.req?.url;\n\n// --------------------------------------------------\n// Detect Fetch / API Request\n// --------------------------------------------------\nconst isFetchRequest =\n    msg.req?.headers?.[\"x-requested-with\"] === \"XMLHttpRequest\" ||\n    msg.req?.headers?.accept?.includes(\"application/json\");\n\n msg.isFetchRequest = isFetchRequest;  \n\n\n// --------------------------------------------------\n// INITIALIZE\n// --------------------------------------------------\nlet userDetails = null;\nlet redirectTo = null;\n\n// --------------------------------------------------\n// VALIDATE TOKENS\n// --------------------------------------------------\nconst loginData = loginToken ? loginTokenMap.get(loginToken) : null;\nconst pinData = pinToken ? pinTokenMap.get(pinToken) : null;\n\n\n// ==================================================\n// ================= AUTH LOGIC =====================\n// ==================================================\n\n/* ==================================================\n   1️⃣ FULL LOGIN (loginToken valid)\n================================================== */\nif (loginData) {\n\n    userDetails = loginData;\n\n    // If logged in & hitting login or pin → redirect to home\n    if (currentPath === \"/login\" || currentPath === \"/pin\") {\n        redirectTo = \"/home\";\n    }\n}\n\n\n/* ==================================================\n   2️⃣ PIN EXISTS BUT NOT FULLY LOGGED IN\n================================================== */\nelse if (pinData) {\n\n    // Allow login page\n    if (currentPath === \"/login\") {\n        return [null, null, msg];\n    }\n\n    // Allow pin page\n    if (currentPath === \"/pin\") {\n        return [null, null, msg];\n    }\n\n    // Any other page → redirect to pin\n    redirectTo = \"/pin\";\n}\n\n\n/* ==================================================\n   3️⃣ NO TOKENS\n================================================== */\nelse {\n\n    // Allow login page\n    if (currentPath === \"/login\") {\n        return [null, null, msg];\n    }\n\n    // If accessing pin page without pinToken → go to login\n    if (currentPath === \"/pin\") {\n        redirectTo = \"/login\";\n    }\n\n    // Any other page → redirect to login\n    else {\n        redirectTo = \"/login\";\n    }\n}\n\n\n// ==================================================\n// =============== HANDLE REDIRECT ==================\n// ==================================================\n\nif (redirectTo) {\n\n    // 🔥 IMPORTANT FIX:\n    // If user is logged in, attach details BEFORE redirect\n    if (userDetails) {\n        msg.userDetails = userDetails;\n        msg.isAuthenticated = true;\n    }\n\n    if (isFetchRequest) {\n        // Output 1 → Fetch Unauthorized\n        msg.statusCode = 401;\n        msg.payload = {\n            success: false,\n            message: \"Authentication required\",\n            redirect: redirectTo\n        };\n        return [msg, null, null];\n    } else {\n        // Output 2 → Normal Redirect\n        msg.statusCode = 302;\n        msg.headers = { \n            Location: \".\" + redirectTo\n             };\n        msg.payload = \"Redirecting...\";\n        return [null, msg, null];\n    }\n}\n\n\n// ==================================================\n// =============== AUTH SUCCESS =====================\n// ==================================================\n\nif (userDetails) {\n\n    msg.userDetails = userDetails;\n    msg.isAuthenticated = true;\n\n    // Output 3 → Authenticated\n    return [null, null, msg];\n}\n\n\n// ==================================================\n// =============== SAFETY FALLBACK ==================\n// ==================================================\n\nmsg.statusCode = 401;\nmsg.payload = { success: false, message: \"Unauthorized\" };\nreturn [msg, null, null];\n",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 40,
+        "wires": [
+            [],
+            [],
+            []
+        ]
+    },
+    {
         "id": "sos_flow_tab",
         "type": "tab",
         "label": "SOS Library API",
@@ -207,63 +1216,7 @@
         "y": 100,
         "wires": [
             [
-                "sos_func_prep1"
-            ]
-        ]
-    },
-    {
-        "id": "sos_func_prep1",
-        "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Prepare Alerts Query",
-        "func": "msg.topic = `SELECT\n    MIN(recid) AS recid,\n    alert\nFROM sosalerts\nWHERE alert IS NOT NULL\nGROUP BY alert\nORDER BY alert`;\nmsg.payload = [];\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 420,
-        "y": 100,
-        "wires": [
-            [
-                "sos_mysql1",
-                "51650603e51955bc"
-            ]
-        ]
-    },
-    {
-        "id": "sos_mysql1",
-        "type": "mysql",
-        "z": "sos_flow_tab",
-        "mydb": "c0be5e4c52ab8c07",
-        "name": "",
-        "x": 700,
-        "y": 100,
-        "wires": [
-            [
-                "sos_func_format1",
-                "51650603e51955bc"
-            ]
-        ]
-    },
-    {
-        "id": "sos_func_format1",
-        "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Format Alerts Response",
-        "func": "msg.statusCode = 200;\nmsg.payload = {\n    success: true,\n    alerts: msg.payload\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 990,
-        "y": 100,
-        "wires": [
-            [
-                "sos_http_resp1"
+                "e6cd7ee663a9364a"
             ]
         ]
     },
@@ -274,28 +1227,12 @@
         "name": "HTTP Response - Alerts",
         "statusCode": "",
         "headers": {},
-        "x": 1310,
+        "x": 1830,
         "y": 100,
         "wires": []
     },
     {
-        "id": "51650603e51955bc",
-        "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 16",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "false",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 630,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "8b72ea2bf25eb97f",
+        "id": "sos_http_in2",
         "type": "http in",
         "z": "sos_flow_tab",
         "name": "POST /sos-alert",
@@ -304,130 +1241,397 @@
         "upload": false,
         "swaggerDoc": "",
         "x": 140,
-        "y": 240,
+        "y": 200,
         "wires": [
             [
-                "8af1443af4b35d01"
+                "ba2c0f4b0e2e7a71"
             ]
         ]
     },
     {
-        "id": "ac7caaebd2414f46",
+        "id": "sos_func_success2",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Success Response",
+        "func": "try {\n    // If DB returned an error\n    if (msg.error) {\n        throw new Error(msg.error.message || \"Database operation failed\");\n    }\n\n    // Success response\n    msg.statusCode = 200;\n\n    msg.payload = {\n        success: true,\n        message: \"SOS Alert Saved Successfully\"\n    };\n\n} catch (err) {\n\n    // Error response\n    msg.statusCode = 500;\n\n    msg.payload = {\n        success: false,\n        message: \"Failed to save SOS Alert\",\n        error: err.message\n    };\n\n    node.error(\"SOS Alert Error: \" + err.message, msg);\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2110,
+        "y": 180,
+        "wires": [
+            [
+                "sos_http_resp2",
+                "d3b67cf24c42dbec"
+            ]
+        ]
+    },
+    {
+        "id": "sos_http_resp2",
+        "type": "http response",
+        "z": "sos_flow_tab",
+        "name": "HTTP Response - Alert Save",
+        "statusCode": "",
+        "headers": {},
+        "x": 2400,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "29ef124d192bb0a5",
+        "type": "http in",
+        "z": "sos_flow_tab",
+        "name": "",
+        "url": "/sos-test",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 150,
+        "y": 320,
+        "wires": [
+            [
+                "67942bd65be0c9c2"
+            ]
+        ]
+    },
+    {
+        "id": "67942bd65be0c9c2",
+        "type": "template",
+        "z": "sos_flow_tab",
+        "name": "",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "<!DOCTYPE html>\n<html>\n<head>\n    <meta charset=\"UTF-8\">\n    <title>SOS  Library Test</title>\n<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/Sudarshan2905/Reusable-SOS-Alert-Library@main/new-sos.css\">\n</head>\n\n<body style=\"padding:40px;font-family:Arial\">\n\n    <h2>SOS Library Test</h2>\n\n    <button id=\"btnSOS\" class=\"sos-trigger\">\n        SOS\n    </button>\n\n    <script src=\"https://cdn.jsdelivr.net/gh/Sudarshan2905/Reusable-SOS-Alert-Library@main/sos3.js\"></script>\n\n    <script>\n    document.addEventListener(\"DOMContentLoaded\", function () {\n\n        SOS.init({\n\n            button: \"#btnSOS\",\n\n\n            apiBase: \"https://ux.integro.coppercloud.in/app\"\n\n        });\n\n    });\n    </script>\n\n</body>\n</html>",
+        "output": "str",
+        "x": 380,
+        "y": 320,
+        "wires": [
+            [
+                "6eccec49c7c05736"
+            ]
+        ]
+    },
+    {
+        "id": "6eccec49c7c05736",
+        "type": "http response",
+        "z": "sos_flow_tab",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 550,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "0695090ba8cc4913",
+        "type": "subflow:5033a981a66d511a",
+        "z": "sos_flow_tab",
+        "name": "",
+        "x": 420,
+        "y": 100,
+        "wires": [
+            [
+                "1cdfb4e7545d4ddf"
+            ]
+        ]
+    },
+    {
+        "id": "1cdfb4e7545d4ddf",
+        "type": "subflow:d15be7953debce86",
+        "z": "sos_flow_tab",
+        "name": "",
+        "x": 720,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "51d0ced847e7e9af",
+        "type": "subflow:5033a981a66d511a",
+        "z": "sos_flow_tab",
+        "name": "",
+        "x": 360,
+        "y": 200,
+        "wires": [
+            [
+                "e9aa0d68a4939512"
+            ]
+        ]
+    },
+    {
+        "id": "e9aa0d68a4939512",
+        "type": "subflow:d15be7953debce86",
+        "z": "sos_flow_tab",
+        "name": "",
+        "x": 600,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "b2ac166e38a58aba",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "sos_flow_tab",
+        "name": "",
+        "x": 1250,
+        "y": 100,
+        "wires": [
+            [
+                "2551110611994fb5",
+                "48a07f3c15f9fa89"
+            ]
+        ]
+    },
+    {
+        "id": "1c5537e223f12e02",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "sos_flow_tab",
+        "name": "",
+        "x": 1870,
+        "y": 180,
+        "wires": [
+            [
+                "sos_func_success2",
+                "cba5bc7a8dfee5de"
+            ]
+        ]
+    },
+    {
+        "id": "518846afce48041b",
+        "type": "subflow:5c7279e5fed154c8",
+        "z": "sos_flow_tab",
+        "name": "VALIDATOR (SOS Alert)",
+        "x": 1350,
+        "y": 200,
+        "wires": [
+            [
+                "sos_func_validate2",
+                "1e2b01ee45e8f773"
+            ]
+        ]
+    },
+    {
+        "id": "a6f09735f103abfa",
+        "type": "debug",
+        "z": "sos_flow_tab",
+        "name": "debug 592",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1830,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "2551110611994fb5",
+        "type": "debug",
+        "z": "sos_flow_tab",
+        "name": "debug 593",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1420,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "e6cd7ee663a9364a",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Prepare SOS Query",
+        "func": "const category = String(msg.req?.query?.category || '').trim();\n\nmsg.sosCategory = category;\n\nif (!category) {\n\n    msg.topic = `\n        SELECT DISTINCT category\n        FROM sosalerts\n        WHERE category IS NOT NULL\n          AND TRIM(category) <> ''\n          AND active = 'y'\n        ORDER BY category ASC;\n    `;\n\n    msg.payload = [];\n\n} else {\n\n    msg.topic = `\n        SELECT\n            recid,\n            category,\n            alert\n        FROM sosalerts\n        WHERE category = ?\n          AND alert IS NOT NULL\n          AND TRIM(alert) <> ''\n          AND active = 'y'\n        ORDER BY alert ASC;\n    `;\n\n    msg.payload = [category];\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1000,
+        "y": 100,
+        "wires": [
+            [
+                "b2ac166e38a58aba"
+            ]
+        ]
+    },
+    {
+        "id": "48a07f3c15f9fa89",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Format Alerts Response",
+        "func": "msg.statusCode = 200;\n\nconst rows = Array.isArray(msg.payload) ? msg.payload : [];\n\nif (!msg.sosCategory) {\n\n    msg.payload = {\n        success: true,\n        categories: rows\n    };\n\n} else {\n\n    msg.payload = {\n        success: true,\n        category: msg.sosCategory,\n        alerts: rows\n    };\n\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1510,
+        "y": 100,
+        "wires": [
+            [
+                "sos_http_resp1"
+            ]
+        ]
+    },
+    {
+        "id": "f4f9c1369f1b1a8e",
+        "type": "function",
+        "z": "sos_flow_tab",
+        "name": "Set Schema - SOS Alert",
+        "func": "msg.schema = {\n   \n    \n    category: {\n        type: 'string',\n        required: true,\n        minLen: 1,\n        maxLen: 100,\n        messages: {\n            required: 'Category is required.',\n            minLen: 'Category must not be empty',\n            maxLen: 'Category must not exceed 100 characters'\n        }\n    },\n\n    alert: {\n        type: 'string',\n        required: true,\n        minLen: 2,\n        maxLen: 255,\n        messages: {\n            required: 'Alert reason is required.',\n            minLen: 'Alert reason must be at least 2 characters',\n            maxLen: 'Alert reason must not exceed 255 characters'\n        }\n    },\n\n    // JSON/object field.\n    // The current VALIDATOR does not have an \"object\" type,\n    // so leave type undefined and let it pass through.\n    other_attributes: {\n        required: false\n    }\n};\n\nmsg.errorRedirectPath =\n    'https://ux.integro.coppercloud.in/app/sos-alerts';\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1070,
+        "y": 200,
+        "wires": [
+            [
+                "518846afce48041b"
+            ]
+        ]
+    },
+    {
+        "id": "sos_func_validate2",
         "type": "function",
         "z": "sos_flow_tab",
         "name": "Validate & Prepare Insert",
-        "func": "var body = msg.payload || {};\n\nvar alert = String(body.alert || \"\").trim();\n\nvar source_recid = body.source_recid ?? null;\n\nif (!alert) {\n\n    var errMsg = { ...msg };\n\n    errMsg.statusCode = 400;\n\n    errMsg.payload = {\n        success: false,\n        message: \"Alert is required.\"\n    };\n\n    return [null, errMsg];\n}\n\nmsg.topic = `\nINSERT INTO alert_dispatch\n(\n    source,\n    source_recid,\n    alert_type,\n    alert_text,\n    sent_on\n)\nVALUES\n(\n    ?, ?, ?, ?, CURDATE()\n);\n`;\n\nmsg.payload = [\n    \"sosalerts\",\n    source_recid,\n    \"sos_alert\",\n    alert\n];\n\nreturn [msg, null];",
+        "func": "const body = msg.payload || {};\n\nconst category = body.category;\nconst alert = body.alert;\nconst otherAttributes = body.other_attributes ?? {};\n\nmsg.notifyData = {\n    category: category,\n    alert: alert,\n    other_attributes: otherAttributes\n};\n\nmsg.topic = `\n    INSERT INTO sosalert_history\n    (\n        alert_text,\n        other_attributes,\n        channel,\n        sent_on\n    )\n    VALUES (?, ?, ?, NOW());\n`;\n\nmsg.payload = [\n    alert,\n    JSON.stringify(otherAttributes),\n    'PWA'\n];\n\nreturn [msg, null];",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1050,
-        "y": 240,
+        "x": 1650,
+        "y": 200,
         "wires": [
             [
-                "d4e3d77b8cdb648f"
+                "1c5537e223f12e02"
             ],
             [
-                "e027d2e75420a356"
+                "sos_http_resp2",
+                "a6f09735f103abfa"
             ]
         ]
     },
     {
-        "id": "d4e3d77b8cdb648f",
-        "type": "mysql",
+        "id": "c937f784686fac03",
+        "type": "debug",
         "z": "sos_flow_tab",
-        "mydb": "c0be5e4c52ab8c07",
-        "name": "",
-        "x": 1280,
-        "y": 200,
-        "wires": [
-            [
-                "0c92a242a030bb70"
-            ]
-        ]
-    },
-    {
-        "id": "0c92a242a030bb70",
-        "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Success Response",
-        "func": "msg.statusCode = 200;\nmsg.payload = {\n    success: true,\n    message: \"SOS Alert Saved Successfully\"\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1470,
-        "y": 200,
-        "wires": [
-            [
-                "e027d2e75420a356"
-            ]
-        ]
-    },
-    {
-        "id": "e027d2e75420a356",
-        "type": "http response",
-        "z": "sos_flow_tab",
-        "name": "HTTP Response - Alert Save",
-        "statusCode": "",
-        "headers": {},
-        "x": 1700,
-        "y": 240,
+        "name": "debug 594",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 960,
+        "y": 260,
         "wires": []
     },
     {
-        "id": "8af1443af4b35d01",
-        "type": "function",
+        "id": "ba2c0f4b0e2e7a71",
+        "type": "json",
         "z": "sos_flow_tab",
-        "name": "Set Schema - SOS Alert",
-        "func": "// ── Set Schema — POST /sos-alert ──\n// sosalert_history.machineid = varchar(100) NULL\n// sosalert_history.alert     = varchar(255) NOT NULL\n\nmsg.schema = {\n    source_recid: {\n        type: 'number',\n        required: false\n    },\n\n    alert: {\n        type: 'string',\n        required: true,\n        minLen: 2,\n        maxLen: 255,\n        messages: {\n            required: 'Alert reason is required.',\n            minLen:   'Alert reason must be at least 2 characters',\n            maxLen:   'Alert reason must not exceed 255 characters'\n        }\n    }\n\n};\n\n// SOS.js always sends fetch/XHR, so this redirect path is never\n// actually used — set only as a harmless fallback.\nmsg.errorRedirectPath = 'https://ux.integro.coppercloud.in/app/sos-alerts';\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 430,
-        "y": 240,
+        "name": "Parse Request Body",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 820,
+        "y": 200,
         "wires": [
             [
-                "dd636ec3785e6a74"
+                "f4f9c1369f1b1a8e",
+                "c937f784686fac03"
             ]
         ]
     },
     {
-        "id": "dd636ec3785e6a74",
-        "type": "subflow:5c7279e5fed154c8",
+        "id": "d3b67cf24c42dbec",
+        "type": "subflow:cc7f1a2b3c4d5e60",
         "z": "sos_flow_tab",
-        "name": "VALIDATOR (SOS Alert)",
-        "x": 750,
-        "y": 240,
-        "wires": [
-            [
-                "ac7caaebd2414f46"
-            ]
-        ]
+        "name": "",
+        "env": [
+            {
+                "name": "recipientValue",
+                "value": "coord-sos",
+                "type": "str"
+            },
+            {
+                "name": "dataRoot",
+                "value": "notifyData",
+                "type": "str"
+            },
+            {
+                "name": "titleTemplate",
+                "value": "SOS Alert",
+                "type": "str"
+            },
+            {
+                "name": "bodyTemplate",
+                "value": "{{alert}} ({{category}})",
+                "type": "str"
+            }
+        ],
+        "x": 2380,
+        "y": 120,
+        "wires": []
     },
     {
-        "id": "c0be5e4c52ab8c07",
-        "type": "MySQLdatabase",
-        "name": "ccdevdb",
-        "host": "ls-aa22ad8183f50a35f9bd357eb259c887b0134ec1.cwrwf5hsrgjs.ca-central-1.rds.amazonaws.com",
-        "port": "3306",
-        "db": "truecolors",
-        "tz": "",
-        "charset": "UTF8"
+        "id": "cba5bc7a8dfee5de",
+        "type": "debug",
+        "z": "sos_flow_tab",
+        "name": "debug 595",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 2030,
+        "y": 100,
+        "wires": []
     },
     {
-        "id": "e42eae5bbe9eb563",
-        "type": "global-config",
-        "env": [],
-        "modules": {
-            "node-red-node-mysql": "3.0.0"
-        }
+        "id": "1e2b01ee45e8f773",
+        "type": "debug",
+        "z": "sos_flow_tab",
+        "name": "debug 596",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1500,
+        "y": 300,
+        "wires": []
     }
 ]
