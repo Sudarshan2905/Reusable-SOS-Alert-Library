@@ -739,7 +739,6 @@ const fetchAlertsForCategory = async (category, force = false) => {
     const other_attributes= config.context || {};
     // ── sendAlert() — MODIFIED: payload now includes category ──
   const payload = {
-    source_recid: state.selectedRecId,
     category: state.selectedCategory,   // NEW
     alert: alertText,
     other_attributes: other_attributes
