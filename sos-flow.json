@@ -1,592 +1,102 @@
 [
     {
-        "id": "cc7f1a2b3c4d5e60",
+        "id": "cb85b1c398c1c3ab",
         "type": "subflow",
-        "name": "NOTIFY",
-        "info": "CC NOTIFY — save the notification, then announce it.\n\nWrites one row per recipient into `user_notifications`, THEN attempts the\nweb push. A failed / undelivered / never-subscribed push can no longer\nlose a notification.\n\nReplaces the old NOTIFY ADAPTER + PUSH NOTIFY pair. One node, not two.\n\n=========================== RECIPIENTS ===========================\nrecipientMode:\n  role -> notify role(s)      recipientValue = \"billing,coordinator\"\n  user -> notify username(s)  recipientValue = \"jsmith\"\n  all  -> everyone active     recipientValue ignored\n\nrecipientPath: msg path holding recipients resolved by your flow.\n  Accepts an array or a comma-string. Dotted paths work.\n  When set it OVERRIDES recipientValue. Resolves empty -> dropped.\n  recipientMode still applies — it says which column to match against.\n\nIMPORTANT: usernames, not display names.\n\n============================ LEDGER ==============================\nsaveToInbox: yes (default) saves a user_notifications row per\n  recipient and then pushes. No sends the push ONLY.\n\n  Use \"no\" for snapshot-shaped notifications: a digest whose body is a\n  count and a CTA (\"5 orders overdue — tap to view\") goes stale within\n  hours, and a week of them crowds out the real events. Anything that\n  states a fact about a record should stay on \"yes\".\n\n  Skipping means a missed push is a lost notification, which is the\n  failure this subflow exists to prevent. Treat it as the exception.\n\n=========================== TEMPLATES ============================\ndataRoot: where endpoint data lives (default: payload).\n  {{field}} resolves relative to this.\n\ntag: rendered per record. Give each notification a DISTINCT tag\n  (include the record id) — Web Push collapses shared tags.\n\nurl: real deep link, and check the recipient's role can reach it.\n  In the notification centre every entry is a permanent link, so\n  ./home is a poor default and a page they can't open is worse.\n\n===================== SETUP ON A NEW PROJECT =====================\nSee CC-NOTIFY-SETUP.md. In short:\n  1. Run cc-notify.sql\n  2. Point the web-push node at this project's VAPID config  <-- REQUIRED\n  3. Check the three [3] resolve SELECTs match this project's user table\n  4. Confirm the four DB nodes resolve (CopperCloud standard id)",
+        "name": "DB NODE ",
+        "info": "",
         "category": "",
         "in": [
             {
-                "x": 60,
-                "y": 160,
+                "x": 200,
+                "y": 40,
                 "wires": [
                     {
-                        "id": "ccn_render"
+                        "id": "6ff257df642fe4ce"
                     }
                 ]
             }
         ],
-        "out": [],
-        "env": [
+        "out": [
             {
-                "name": "recipientMode",
-                "type": "str",
-                "value": "role",
-                "ui": {
-                    "label": {
-                        "en-US": "Recipient mode"
+                "x": 740,
+                "y": 40,
+                "wires": [
+                    {
+                        "id": "e6110207264b09a5",
+                        "port": 0
                     },
-                    "type": "select",
-                    "opts": {
-                        "opts": [
-                            {
-                                "l": {
-                                    "en-US": "role (fixed role)"
-                                },
-                                "v": "role"
-                            },
-                            {
-                                "l": {
-                                    "en-US": "user (fixed username)"
-                                },
-                                "v": "user"
-                            },
-                            {
-                                "l": {
-                                    "en-US": "all (broadcast to everyone)"
-                                },
-                                "v": "all"
-                            }
-                        ]
+                    {
+                        "id": "1d13544cecdbbcc8",
+                        "port": 0
                     }
-                }
-            },
-            {
-                "name": "recipientValue",
-                "type": "str",
-                "value": "",
-                "ui": {
-                    "label": {
-                        "en-US": "Recipient value"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "recipientPath",
-                "type": "str",
-                "value": "",
-                "ui": {
-                    "label": {
-                        "en-US": "Recipient path (msg) — overrides value"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "dataRoot",
-                "type": "str",
-                "value": "payload",
-                "ui": {
-                    "label": {
-                        "en-US": "Data root (msg path)"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "saveToInbox",
-                "type": "str",
-                "value": "y",
-                "ui": {
-                    "label": {
-                        "en-US": "Save to notification centre"
-                    },
-                    "type": "select",
-                    "opts": {
-                        "opts": [
-                            {
-                                "l": {
-                                    "en-US": "yes — save + push (default)"
-                                },
-                                "v": "y"
-                            },
-                            {
-                                "l": {
-                                    "en-US": "no — push only, no inbox row"
-                                },
-                                "v": "n"
-                            }
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "titleTemplate",
-                "type": "str",
-                "value": "",
-                "ui": {
-                    "label": {
-                        "en-US": "Title template"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "bodyTemplate",
-                "type": "str",
-                "value": "",
-                "ui": {
-                    "label": {
-                        "en-US": "Body template"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "url",
-                "type": "str",
-                "value": "./home",
-                "ui": {
-                    "label": {
-                        "en-US": "URL (deep link)"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
-            },
-            {
-                "name": "tag",
-                "type": "str",
-                "value": "",
-                "ui": {
-                    "label": {
-                        "en-US": "Tag"
-                    },
-                    "type": "input",
-                    "opts": {
-                        "types": [
-                            "str"
-                        ]
-                    }
-                }
+                ]
             }
         ],
-        "meta": {
-            "module": "cc-notify",
-            "version": "1.1.0",
-            "desc": "Notification ledger + web push",
-            "author": "CopperCloud Platform Team"
-        },
-        "color": "#87A96B",
-        "icon": "font-awesome/fa-bell-o"
+        "env": [],
+        "meta": {},
+        "color": "#DDAA99"
     },
     {
-        "id": "ccn_note",
-        "type": "comment",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "SETUP: point [10] push at this project's VAPID config",
-        "info": "The web-push node ships with NO vapidConfiguration. It will show a\nred error on deploy until you pick one — that is deliberate. An\nunset VAPID config is a silent no-send otherwise, and a red node\nis a louder reminder than a line in a setup doc.\n\nThe four DB nodes reference the CopperCloud standard DB subflow\n(cb85b1c398c1c3ab). If this project uses a different id, re-point\nthem — they will show as unknown-node otherwise.\n\nThe three [3] resolve SELECTs assume a `users` table with\n`recid`, `username`, `userrole` (JSON) and `active`. Adjust them\nhere if this project's schema differs. Keep the `u` alias — the\nrole clause built in [1] depends on it.",
-        "x": 230,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "ccn_render",
-        "type": "function",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[1] render + resolve config",
-        "func": "// ============================================================\n// CC NOTIFY — [1] render + resolve config\n//\n// Reads the subflow env config, renders {{field}} templates\n// against the endpoint's data, and normalises targeting into\n// the SQL fragments the resolve step needs.\n//\n// No SQL is built here. This node emits params + fragments only.\n// ============================================================\n\n// ── CONFIG ───────────────────────────────────────────────────\nconst recipientMode   = env.get('recipientMode')  || 'role';    // role | user | all\nconst recipientValue  = env.get('recipientValue') || '';        // \"billing,coordinator\"\nconst recipientPath   = env.get('recipientPath')  || '';        // msg path, overrides value\nconst dataRootPath    = env.get('dataRoot')       || 'payload';\nconst titleTemplate   = env.get('titleTemplate')  || 'Notification';\nconst bodyTemplate    = env.get('bodyTemplate')   || '';\nconst urlTemplate     = env.get('url')            || './home';\nconst notificationTag = env.get('tag')            || 'notification';\n\n// Ledger toggle. Default is to save — skipping is the deliberate\n// exception, so an unset env var must never silently drop the row.\nconst saveToInbox     = (env.get('saveToInbox') || 'y') !== 'n';\n\n// ── HELPERS ──────────────────────────────────────────────────\n\n// Walk a dotted path: getValueAtPath(msg, 'ctx.req') -> msg.ctx.req\n// Returns undefined (never throws) if any link is missing.\nfunction getValueAtPath(sourceObject, dottedPath) {\n  const pathSegments = String(dottedPath || '').split('.');\n  return pathSegments.reduce(\n    (currentValue, segment) =>\n      (currentValue == null ? undefined : currentValue[segment]),\n    sourceObject\n  );\n}\n\n// \"Card {{pcn}}\" -> \"Card PCN-12345\". Missing fields render empty.\nfunction renderTemplate(templateString, sourceData) {\n  const PLACEHOLDER_PATTERN = /{{\\s*([\\w.]+)\\s*}}/g;\n  return String(templateString || '').replace(\n    PLACEHOLDER_PATTERN,\n    (fullMatch, fieldName) => {\n      const fieldValue = getValueAtPath(sourceData, fieldName);\n      return fieldValue == null ? '' : fieldValue;\n    }\n  );\n}\n\n// \"alice, bob\" -> ['alice','bob']   (blanks dropped)\nfunction splitCommaList(commaSeparatedString) {\n  return String(commaSeparatedString || '')\n    .split(',')\n    .map(item => item.trim())\n    .filter(Boolean);\n}\n\n// Accepts ['a','b'] or \"a,b\" or \"a\" — all become ['a', ...].\nfunction toRecipientList(rawValue) {\n  if (Array.isArray(rawValue)) {\n    return rawValue.map(item => String(item).trim()).filter(Boolean);\n  }\n  return splitCommaList(rawValue);\n}\n\n// ── DATA SOURCE FOR TEMPLATES ────────────────────────────────\n// Deliberately independent of the recipient — record data and\n// recipients come from different places.\nconst templateData = getValueAtPath(msg, dataRootPath) || {};\n\n// ── RESOLVE RECIPIENTS ───────────────────────────────────────\n// Static env value unless recipientPath is configured. An empty\n// dynamic lookup DROPS the message rather than falling back to\n// the static value — notifying the wrong people is worse than\n// notifying nobody.\nlet resolvedRecipients;\n\nif (recipientPath) {\n  resolvedRecipients = toRecipientList(getValueAtPath(msg, recipientPath));\n\n  if (resolvedRecipients.length === 0) {\n    node.warn(\n      `CC NOTIFY: recipientPath \"${recipientPath}\" resolved empty — ` +\n      `dropping \"${titleTemplate}\". Check the lookup upstream.`\n    );\n    return null;\n  }\n} else {\n  resolvedRecipients = splitCommaList(recipientValue);\n}\n\n// ── RENDER ONCE ──────────────────────────────────────────────\n// Both the ledger and the push read from this. Rendering once is\n// what stops the saved row and the delivered push disagreeing.\nmsg.notif = {\n  title: renderTemplate(titleTemplate, templateData),\n  body:  renderTemplate(bodyTemplate,  templateData),\n  url:   renderTemplate(urlTemplate,   templateData),\n  tag:   renderTemplate(notificationTag, templateData)\n};\n\n// ── SHAPE THE TARGETING ──────────────────────────────────────\n// Emits the WHERE fragment + params for step [3]. The `u.` alias\n// is baked into roleClause, so the resolve SELECTs must alias\n// the user table as `u`.\nif (recipientMode === 'user') {\n  if (resolvedRecipients.length === 0) {\n    node.warn(`CC NOTIFY: no usernames for \"${titleTemplate}\" — dropping.`);\n    return null;\n  }\n  msg.placeholders = resolvedRecipients.map(() => '?').join(',');\n  msg.payload = resolvedRecipients;\n}\nelse if (recipientMode === 'role') {\n  if (resolvedRecipients.length === 0) {\n    node.warn(`CC NOTIFY: no roles for \"${titleTemplate}\" — dropping.`);\n    return null;\n  }\n  msg.roleClause = resolvedRecipients\n    .map(() => 'JSON_CONTAINS(u.userrole, JSON_QUOTE(?))')\n    .join(' OR ');\n  msg.payload = resolvedRecipients;\n}\nelse if (recipientMode === 'all') {\n  msg.payload = [];\n}\nelse {\n  node.warn(`CC NOTIFY: unknown recipientMode \"${recipientMode}\" — dropping.`);\n  return null;\n}\n\nmsg.selectMode  = recipientMode;\n\n// Carried on the message rather than read again downstream: a switch node\n// reading env would work, but this way the decision shows up in a debug\n// dump, which matters when someone asks why a notification never appeared\n// in the panel.\nmsg.saveToInbox = saveToInbox;\n\n// ── STRIP HTTP CONTEXT (fire-and-forget) ─────────────────────\n// The endpoint already sent its response. If msg.res survived,\n// anything downstream could fire a second one.\ndelete msg.req;\ndelete msg.res;\ndelete msg.statusCode;\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 220,
-        "y": 160,
-        "wires": [
-            [
-                "ccn_switch"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_switch",
-        "type": "switch",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[2] route by mode",
-        "property": "selectMode",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "eq",
-                "v": "user",
-                "vt": "str"
-            },
-            {
-                "t": "eq",
-                "v": "role",
-                "vt": "str"
-            },
-            {
-                "t": "eq",
-                "v": "all",
-                "vt": "str"
-            }
-        ],
-        "checkall": "false",
-        "repair": false,
-        "outputs": 3,
-        "x": 470,
-        "y": 160,
-        "wires": [
-            [
-                "ccn_sql_user"
-            ],
-            [
-                "ccn_sql_role"
-            ],
-            [
-                "ccn_sql_all"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_sql_user",
-        "type": "template",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[3] users by username",
-        "field": "topic",
-        "fieldType": "msg",
-        "format": "handlebars",
-        "syntax": "mustache",
-        "template": "SELECT DISTINCT u.recid\nFROM users u\nWHERE u.active = 'y'\nAND u.username IN ({{{placeholders}}});",
-        "output": "str",
-        "x": 720,
-        "y": 100,
-        "wires": [
-            [
-                "ccn_db_resolve"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_sql_role",
-        "type": "template",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[3] users by role",
-        "field": "topic",
-        "fieldType": "msg",
-        "format": "handlebars",
-        "syntax": "mustache",
-        "template": "SELECT DISTINCT u.recid\nFROM users u\nWHERE u.active = 'y'\nAND ({{{roleClause}}});",
-        "output": "str",
-        "x": 720,
-        "y": 160,
-        "wires": [
-            [
-                "ccn_db_resolve"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_sql_all",
-        "type": "template",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[3] all active users",
-        "field": "topic",
-        "fieldType": "msg",
-        "format": "handlebars",
-        "syntax": "mustache",
-        "template": "SELECT u.recid\nFROM users u\nWHERE u.active = 'y';",
-        "output": "str",
-        "x": 720,
-        "y": 220,
-        "wires": [
-            [
-                "ccn_db_resolve"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_db_resolve",
-        "type": "subflow:cb85b1c398c1c3ab",
-        "z": "cc7f1a2b3c4d5e60",
+        "id": "6ff257df642fe4ce",
+        "type": "delay",
+        "z": "cb85b1c398c1c3ab",
         "name": "",
-        "x": 970,
-        "y": 160,
-        "wires": [
-            [
-                "ccn_userids"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_userids",
-        "type": "function",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[4] extract userids",
-        "func": "// ============================================================\n// CC NOTIFY — [4] extract userids\n//\n// Runs on BOTH branches, before the saveToInbox switch.\n// Resolution happens ONCE and feeds both the ledger and the push,\n// so the two can never disagree about who the recipients were.\n// ============================================================\n\nconst rows = msg.payload;\n\nif (!Array.isArray(rows) || rows.length === 0) {\n  node.warn(\n    `CC NOTIFY: no active users matched mode \"${msg.selectMode}\" — ` +\n    `nothing saved, nothing sent for \"${msg.notif.title}\".`\n  );\n  return null;\n}\n\n// Kept on the message so step [7] can reuse them for the\n// subscription lookup. One resolution, two consumers.\nmsg.userIds = rows.map(row => row.recid).filter(id => id != null);\n\nif (msg.userIds.length === 0) {\n  node.warn('CC NOTIFY: resolve returned rows but no recid values — dropping.');\n  return null;\n}\n\nreturn msg;",
+        "pauseType": "rate",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "30",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
         "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1170,
-        "y": 160,
+        "x": 380,
+        "y": 40,
         "wires": [
             [
-                "ccn_switch_save"
+                "e6110207264b09a5"
             ]
         ]
     },
     {
-        "id": "ccn_switch_save",
-        "type": "switch",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[5] save to inbox?",
-        "property": "saveToInbox",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "true"
-            },
-            {
-                "t": "false"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 150,
-        "y": 360,
-        "wires": [
-            [
-                "ccn_rows"
-            ],
-            [
-                "ccn_subparams"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_rows",
-        "type": "function",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[6] build ledger rows",
-        "func": "// ============================================================\n// CC NOTIFY — [6] build ledger rows\n//\n// Skipped entirely when saveToInbox is off. Params only — the SQL\n// lives in the next template node.\n// ============================================================\n\nconst n = msg.notif;\n\n// (?,?,?,?,?),(?,?,?,?,?)...  one group per user.\n// The empty guard in [4] matters here: \"VALUES ;\" is a syntax error.\nmsg.rowPlaceholders = msg.userIds.map(() => '(?,?,?,?,?)').join(',');\n\nmsg.payload = msg.userIds.reduce(\n  (params, userId) => params.concat([\n    userId, n.title, n.body, n.url, n.tag\n  ]),\n  []\n);\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 480,
-        "y": 320,
-        "wires": [
-            [
-                "ccn_sql_insert"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_sql_insert",
-        "type": "template",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[6] save notification",
-        "field": "topic",
-        "fieldType": "msg",
-        "format": "handlebars",
-        "syntax": "mustache",
-        "template": "INSERT INTO user_notifications\n  (userid, title, body, url, tag)\nVALUES {{{rowPlaceholders}}};",
-        "output": "str",
-        "x": 720,
-        "y": 320,
-        "wires": [
-            [
-                "ccn_db_insert"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_db_insert",
-        "type": "subflow:cb85b1c398c1c3ab",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "",
-        "x": 950,
-        "y": 320,
-        "wires": [
-            [
-                "ccn_subparams"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_subparams",
-        "type": "function",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[7] subscription params",
-        "func": "// ============================================================\n// CC NOTIFY — [7] subscription lookup params\n//\n// Both branches land here. If the ledger was written, everything\n// from this point is best-effort — push can fail entirely and the\n// user still sees the notification when they open the app.\n//\n// Because step [4] already resolved userids, this is ONE query\n// with no user-table join and no role clause.\n// ============================================================\n\nmsg.placeholders = msg.userIds.map(() => '?').join(',');\nmsg.payload = msg.userIds;\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1190,
-        "y": 360,
-        "wires": [
-            [
-                "ccn_sql_subs"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_sql_subs",
-        "type": "template",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[8] find devices",
-        "field": "topic",
-        "fieldType": "msg",
-        "format": "handlebars",
-        "syntax": "mustache",
-        "template": "SELECT DISTINCT ps.subscription\nFROM push_subscriptions ps\nWHERE ps.active = 'y'\nAND ps.userid IN ({{{placeholders}}});",
-        "output": "str",
-        "x": 160,
-        "y": 520,
-        "wires": [
-            [
-                "ccn_db_subs"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_db_subs",
-        "type": "subflow:cb85b1c398c1c3ab",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "",
-        "x": 390,
-        "y": 520,
-        "wires": [
-            [
-                "ccn_shape"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_shape",
-        "type": "function",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[9] shape subscriptions",
-        "func": "// ============================================================\n// CC NOTIFY — [9] shape subscriptions for web-push\n// ============================================================\n\nconst rows = msg.payload;\n\nif (!Array.isArray(rows) || rows.length === 0) {\n  // Not an error. If the ledger ran, this is exactly the case it\n  // exists for — saved, but nobody has a live device.\n  node.warn(\n    `CC NOTIFY: \"${msg.notif.title}\" resolved to ${msg.userIds.length} user(s), ` +\n    `but no active subscriptions — no push sent.`\n  );\n  return null;\n}\n\nmsg.subscriptions = rows.map(row => {\n  const sub = typeof row.subscription === 'string'\n    ? JSON.parse(row.subscription)\n    : row.subscription;\n  return {\n    endpoint: sub.endpoint,\n    keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }\n  };\n});\n\nmsg.notification = {\n  title: msg.notif.title || 'Notification',\n  body:  msg.notif.body  || '',\n  url:   msg.notif.url   || './home',\n  tag:   msg.notif.tag   || 'notification'\n};\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 640,
-        "y": 520,
-        "wires": [
-            [
-                "ccn_push"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_push",
-        "type": "web-push",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[10] push",
-        "vapidConfiguration": "5c8d89bb02db35a6",
-        "x": 900,
-        "y": 520,
-        "wires": [
-            [
-                "ccn_dead"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_dead",
-        "type": "function",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[11] deactivate dead",
-        "func": "// ============================================================\n// CC NOTIFY — [11] deactivate dead endpoints\n// ============================================================\n\nconst failedList = msg.payload.failed || [];\nif (failedList.length === 0) return null;\n\nconst sentEndpoints = new Set(\n  (msg.payload.sent || []).map(s => s.endpoint).filter(Boolean)\n);\n\nconst deadEndpoints = (msg.subscriptions || [])\n  .map(s => s.endpoint)\n  .filter(ep => ep && !sentEndpoints.has(ep));\n\n// If the diff doesn't match the failure count, our assumption that\n// sent/failed are disjoint subsets is wrong. Bail rather than\n// deactivate the wrong rows.\nif (deadEndpoints.length !== failedList.length) {\n  node.warn(\n    `CC NOTIFY: endpoint diff mismatch — ${deadEndpoints.length} unaccounted ` +\n    `vs ${failedList.length} failed. Not deactivating.`\n  );\n  return null;\n}\n\nnode.warn(`CC NOTIFY: deactivating ${deadEndpoints.length} dead subscription(s).`);\n\nmsg.placeholders = deadEndpoints.map(() => '?').join(',');\nmsg.payload = deadEndpoints;\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1120,
-        "y": 520,
-        "wires": [
-            [
-                "ccn_sql_dead"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_sql_dead",
-        "type": "template",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "[12] deactivate",
-        "field": "topic",
-        "fieldType": "msg",
-        "format": "handlebars",
-        "syntax": "mustache",
-        "template": "UPDATE push_subscriptions\nSET active = 'n'\nWHERE JSON_UNQUOTE(JSON_EXTRACT(subscription, '$.endpoint')) IN ({{{placeholders}}});",
-        "output": "str",
-        "x": 1340,
-        "y": 520,
-        "wires": [
-            [
-                "ccn_db_dead"
-            ]
-        ]
-    },
-    {
-        "id": "ccn_db_dead",
-        "type": "subflow:cb85b1c398c1c3ab",
-        "z": "cc7f1a2b3c4d5e60",
-        "name": "",
-        "x": 1560,
-        "y": 520,
+        "id": "e6110207264b09a5",
+        "type": "mysql",
+        "z": "cb85b1c398c1c3ab",
+        "mydb": "8af565446e8ba893",
+        "name": "DB_CONFIG",
+        "x": 610,
+        "y": 40,
         "wires": [
             []
         ]
     },
     {
-        "id": "5c8d89bb02db35a6",
-        "type": "vapid-configuration",
-        "subject": "mailto:leneomkar@gmail.com",
-        "publicKey": "BAxegrMG5z4zm_2ZJz-0gsPlCpSj3bt097ecQERZxdyEX-57t6I-oc_Iel_UXiAUWH8rx1NCTbp0wMRmPa5n3ao",
-        "privateKey": "9ZtFkX9B8wOQ8ybPbpdGyOoSgRROxuJ3l1_R23XwiDs",
-        "gcmApiKey": "",
-        "timeout": "0",
-        "name": ""
+        "id": "1d13544cecdbbcc8",
+        "type": "catch",
+        "z": "cb85b1c398c1c3ab",
+        "name": "",
+        "scope": [
+            "e6110207264b09a5"
+        ],
+        "uncaught": false,
+        "x": 610,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "8af565446e8ba893",
+        "type": "MySQLdatabase",
+        "name": "DB CONFIG ",
+        "host": "${DB_HOST}",
+        "port": "3306",
+        "db": "${DB_DBNAME}",
+        "tz": "",
+        "charset": "UTF8"
     },
     {
         "id": "5c7279e5fed154c8",
@@ -777,103 +287,143 @@
         ]
     },
     {
-        "id": "cb85b1c398c1c3ab",
+        "id": "c653681de39a873e",
         "type": "subflow",
-        "name": "DB NODE ",
-        "info": "",
+        "name": "NAV_BUILDER",
+        "info": "# UI Builder Subflow\n\nTakes `msg.rbac` (from the RBAC subflow output 1) and builds\nrole-scoped HTML snippets for tiles, sidebar nav, and JS redirect\nlisteners ready to drop into a Mustache template.\n\n## Environment variables\n\n| Variable | Default | Description |\n|----------|---------|-------------|\n| `ICON_BASE` | `https://cdn.jsdelivr.net/gh/coppercloud-iotech/staticfiles/artline/` | CDN prefix for all icon URLs |\n\n## Output msg properties\n\n| Property | Description |\n|----------|-------------|\n| `msg.homeButtons` | HTML string — tile grid for the home page |\n| `msg.navButtons` | HTML string — sidebar nav buttons |\n| `msg.redirectListeners` | JS string — `addRedirectListener(...)` calls |\n\n## Wiring\n\n```\n[RBAC subflow output 1] → [UI Builder input]\n[UI Builder output 1]   → [Template / DB node]\n```",
         "category": "",
         "in": [
             {
-                "x": 200,
-                "y": 40,
+                "x": 60,
+                "y": 120,
                 "wires": [
                     {
-                        "id": "6ff257df642fe4ce"
+                        "id": "330da73481fd9589"
+                    },
+                    {
+                        "id": "215b0bb80d02d892"
                     }
                 ]
             }
         ],
         "out": [
             {
-                "x": 740,
-                "y": 40,
+                "x": 540,
+                "y": 120,
                 "wires": [
                     {
-                        "id": "e6110207264b09a5",
-                        "port": 0
-                    },
-                    {
-                        "id": "1d13544cecdbbcc8",
+                        "id": "215b0bb80d02d892",
                         "port": 0
                     }
                 ]
             }
         ],
-        "env": [],
-        "meta": {},
-        "color": "#DDAA99"
+        "env": [
+            {
+                "name": "ICON_BASE",
+                "type": "str",
+                "value": "https://cdn.jsdelivr.net/gh/coppercloud-iotech/staticfiles/artline/"
+            }
+        ],
+        "meta": {
+            "module": "sf-ui-builder",
+            "version": "1.0.0",
+            "author": "Artline",
+            "desc": "Role-scoped UI tile and nav builder",
+            "license": "MIT"
+        },
+        "color": "#6366f1",
+        "icon": "font-awesome/fa-th-large"
     },
     {
-        "id": "6ff257df642fe4ce",
-        "type": "delay",
-        "z": "cb85b1c398c1c3ab",
-        "name": "",
-        "pauseType": "rate",
-        "timeout": "5",
-        "timeoutUnits": "seconds",
-        "rate": "30",
-        "nbRateUnits": "1",
-        "rateUnits": "second",
-        "randomFirst": "1",
-        "randomLast": "5",
-        "randomUnits": "seconds",
-        "drop": false,
-        "allowrate": false,
+        "id": "330da73481fd9589",
+        "type": "debug",
+        "z": "c653681de39a873e",
+        "name": "debug 551",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 290,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "215b0bb80d02d892",
+        "type": "function",
+        "z": "c653681de39a873e",
+        "name": "New Test UI Builder",
+        "func": "// ====================================================\n// NAV BUILDER — UI Builder Logic\n//\n// A drop-in block. The code below NEVER changes between\n// projects. Only NAV_CONFIG does, and that can come from\n// a subflow property / env var so the same subflow can be\n// dragged into any Node-RED instance untouched.\n//\n// INPUT\n//   msg.rbac — from the RBAC subflow (output 1)\n//              { userRoles: ['admin'] }  or  { userRole: 'admin' }\n//\n// OUTPUT  (property names unchanged — templates need no edit)\n//   msg.homeButtons       — category tiles + drill-down views + search\n//   msg.navButtons        — sidebar nav HTML (flat, as before)\n//   msg.redirectListeners — addRedirectListener calls + page wiring\n//\n// CONFIG\n//   env NAV_CONFIG — JSON matching DEFAULT_CONFIG below.\n//                    If unset, DEFAULT_CONFIG is used.\n//\n// ONE ENTRY PER TOOL — the old TILES + NAV_BUTTONS maps\n// duplicated className/icon/href across 19 keys, which is\n// how `sfg-movement-dashboard -icon.svg` (note the stray\n// space) ended up wrong in both. Now each tool is declared\n// once and both surfaces are derived from it:\n//   key       — unique id\n//   label     — tile caption (uppercase house style)\n//   navLabel  — sidebar tooltip; falls back to label\n//   className — drives BOTH the tile and the nav button, and\n//               is what addRedirectListener() binds to\n//   icon      — filename appended to iconBase\n//   href      — target route\n//   tile      — optional, false = no home tile\n//   nav       — optional, false = no sidebar button\n// ====================================================\n\n\n// --------------------------------------------------\n// 1. Safety check — rbac must exist\n// --------------------------------------------------\nif (!msg.rbac || (!msg.rbac.userRoles && !msg.rbac.userRole)) {\n    node.warn('Nav Builder: msg.rbac missing — is RBAC subflow wired to output 1?');\n    return null;\n}\n\n\n// --------------------------------------------------\n// 2. DEFAULT_CONFIG — the only project-specific block.\n// Override wholesale via the NAV_CONFIG env var.\n// --------------------------------------------------\nconst DEFAULT_CONFIG = {\n\n    iconBase: 'https://cdn.jsdelivr.net/gh/coppercloud-iotech/staticfiles/artline/',\n\n    // Text shown above the tools list after drilling in.\n    backLabel: '← All categories',\n\n    categories: [\n        {\n            id: 'orders',\n            label: 'Orders',\n            icon: 'artline-orderbook-icon.svg',\n            items: [\n                { key: 'orderbook',    label: 'ORDER BOOK',    navLabel: 'Order Book',    className: 'orderbook-button',     icon: 'artline-orderbook-icon.svg', href: './orderbook' },\n                { key: 'manageorders', label: 'MANAGE ORDERS', navLabel: 'Manage Orders', className: 'manage-orders-button', icon: 'manager-orders-icon.svg',    href: './manageorders' }\n            ]\n        },\n        {\n            id: 'production',\n            label: 'Production',\n            icon: 'artline-grey-production-icon.svg',\n            items: [\n                { key: 'greyproduction',  label: 'GREY PROD',         navLabel: 'Grey Production', className: 'grey-production-button',   icon: 'artline-grey-production-icon.svg', href: './greyproduction' },\n                { key: 'greyqa',          label: 'GREY QA',           navLabel: 'Grey Quality',    className: 'grey-quality-button',      icon: 'artline-grey-qa-icon.svg',         href: './greyqa' },\n                { key: 'takaproduction',  label: 'TAKA PROD',         navLabel: 'Taka Production', className: 'taka-production-button',   icon: 'artline-taka-production-icon.svg', href: './takaproduction' },\n                { key: 'beamprod',        label: 'BEAM PROD',         navLabel: 'Beam Prod',       className: 'beam-prod-button',         icon: 'beam-production-planning-icon.svg', href: './prodplanning' },\n                { key: 'takayarnreprint', label: 'TAKA YARN REPRINT', navLabel: 'Taka Yarn Reprint', className: 'takayarn-reprint-button', icon: 'taka-yarn-reprint-icon.svg',      href: './takareprint' }\n            ]\n        },\n        {\n            id: 'yarn',\n            label: 'Yarn',\n            icon: 'fresh-yarn-icon.svg',\n            items: [\n                { key: 'yarnmanagement',  label: 'YARN MANAGEMENT',  navLabel: 'Yarn Management',  className: 'yarn-management-button',  icon: 'fresh-yarn-icon.svg',  href: './yarnmanagement' },\n                { key: 'yarnreuse',       label: 'YARN REUSE',       navLabel: 'Yarn Reuse',       className: 'yarn-reuse-button',       icon: 'reuse-yarn-icon.svg',  href: './yarnreuse' },\n                { key: 'issue',           label: 'YARN ISSUE',       navLabel: 'Yarn Issue',       className: 'yarn-issue-button',       icon: 'issue-yarn-icon.svg',  href: './issue' },\n                { key: 'wastemanagement', label: 'WASTE MANAGEMENT', navLabel: 'Waste Management', className: 'waste-management-button', icon: 'yarn-wastage-icon.svg', href: './wastemanagement' }\n            ]\n        },\n        {\n            id: 'movement',\n            label: 'Movement',\n            icon: 'artline-sfg-movement-icon.svg',\n            items: [\n                { key: 'takamovement',         label: 'SFG MOVEMENT',           navLabel: 'Sfg Movement',           className: 'sfg-movement-button',           icon: 'artline-sfg-movement-icon.svg', href: './takamovement' },\n                { key: 'sfgmovementdashboard', label: 'SFG MOVEMENT DASHBOARD', navLabel: 'Sfg Movement Dashboard', className: 'sfg-movement-dashboard-button', icon: 'sfg-movement-dashboard -icon.svg', href: './sfg-movement-dashboard' }\n            ]\n        },\n        {\n            id: 'monitoring',\n            label: 'Monitoring',\n            icon: 'artline-monitor-icon.svg',\n            items: [\n                { key: 'monitor',   label: 'M/C MONITOR', navLabel: 'Machine Stoppage', className: 'stoppage-button',  icon: 'artline-monitor-icon.svg',          href: './monitor' },\n                { key: 'dashboard', label: 'DASHBOARDS',  navLabel: 'Dashboards',       className: 'dashboard-button', icon: 'grafana-dashboard-embed-icon.svg', href: './dashboard' }\n            ]\n        },\n        {\n            id: 'admin',\n            label: 'Admin',\n            icon: 'manage-user-icon.svg',\n            items: [\n                { key: 'addusers',     label: 'ADD USERS',      navLabel: 'Add Users',      className: 'add-users-button',     icon: 'add-user-icon.svg',                    href: './add-users' },\n                { key: 'manageusers',  label: 'MANAGE USERS',   navLabel: 'Manage Users',   className: 'manage-users-button',  icon: 'manage-user-icon.svg',                 href: './manage-users' },\n                { key: 'machineopmap', label: 'MACHINE OP MAP', navLabel: 'Machine Op Map', className: 'machine-op-map-button', icon: 'machine-operator-mapping-icon.svg',   href: './set-machine-mapping' },\n                { key: 'visitor',      label: 'VISITOR',        navLabel: 'Visitor',        className: 'visitor-button',       icon: 'artline-visitor-icon.svg',             href: './visitor' }\n            ]\n        }\n    ],\n\n    // Always rendered in the sidebar, never role-scoped,\n    // never part of a category.\n    fixedNavTop: [\n        { key: 'home', navLabel: 'Home', className: 'home-button', icon: 'artline-home2-icon.svg', href: './home' }\n    ],\n    fixedNavBottom: [\n        { key: 'logout', navLabel: 'Logout', className: 'logout-button', icon: 'artline-logout-icon.svg', href: './logout' }\n    ],\n\n    roles: {\n        'admin':           ['orderbook', 'manageorders', 'greyproduction', 'greyqa', 'takaproduction', 'beamprod', 'takayarnreprint', 'yarnmanagement', 'yarnreuse', 'issue', 'wastemanagement', 'takamovement', 'sfgmovementdashboard', 'monitor', 'dashboard', 'addusers', 'manageusers', 'machineopmap'],\n        'manager':         ['orderbook', 'manageorders', 'greyproduction', 'greyqa', 'takaproduction', 'takayarnreprint', 'yarnmanagement', 'yarnreuse', 'issue', 'wastemanagement', 'takamovement', 'sfgmovementdashboard', 'monitor'],\n        'supervisor':      ['greyproduction', 'greyqa', 'takaproduction', 'sfgmovementdashboard', 'wastemanagement'],\n        'shed supervisor': ['monitor', 'machineopmap'],\n        'operator':        ['monitor'],\n        'gate':            ['visitor']\n    }\n};\n\n\n// --------------------------------------------------\n// 3. Load config (env override → defaults)\n// --------------------------------------------------\nlet CONFIG = DEFAULT_CONFIG;\nconst rawConfig = env.get('NAV_CONFIG');\nif (rawConfig) {\n    try {\n        const parsed = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;\n        if (parsed && Array.isArray(parsed.categories) && parsed.categories.length) {\n            CONFIG = parsed;\n        } else {\n            node.warn('Nav Builder: NAV_CONFIG has no categories[] — using defaults');\n        }\n    } catch (e) {\n        node.warn('Nav Builder: NAV_CONFIG is not valid JSON — using defaults. ' + e.message);\n    }\n}\n\nconst ICON_BASE      = CONFIG.iconBase || '';\nconst BACK_LABEL     = CONFIG.backLabel || '← All categories';\nconst CATEGORIES     = CONFIG.categories || [];\nconst FIXED_NAV_TOP  = CONFIG.fixedNavTop || [];\nconst FIXED_NAV_BOT  = CONFIG.fixedNavBottom || [];\nconst ROLE_MAP       = CONFIG.roles || {};\n\n\n// --------------------------------------------------\n// 4. Resolve roles → allowed keys (union across roles)\n// --------------------------------------------------\nconst userRoles = msg.rbac.userRoles || [msg.rbac.userRole];\n\nconst allKeys = [];\nfor (const role of userRoles) {\n    const roleKeys = ROLE_MAP[String(role).toLowerCase()] || [];\n    allKeys.push(...roleKeys);\n}\nconst allowed = new Set(allKeys);\n\nif (allowed.size === 0) {\n    node.warn(`Nav Builder: no roles entry for [${userRoles.join(',')}] — empty UI will render`);\n}\n\n// Warn about role keys that don't exist in any category —\n// otherwise a typo in roles just silently grants nothing.\nconst declared = new Set();\nCATEGORIES.forEach(c => (c.items || []).forEach(i => declared.add(i.key)));\nconst unknown = [...allowed].filter(k => !declared.has(k));\nif (unknown.length) {\n    node.warn(`Nav Builder: roles reference unknown keys [${unknown.join(',')}]`);\n}\n\n\n// --------------------------------------------------\n// 5. Visible categories — drop anything RBAC emptied\n// --------------------------------------------------\nconst visible = CATEGORIES\n    .map(cat => ({\n        id: cat.id,\n        label: cat.label,\n        icon: cat.icon,\n        items: (cat.items || []).filter(i => allowed.has(i.key))\n    }))\n    .filter(cat => cat.items.length > 0);\n\n\n// --------------------------------------------------\n// 6. Inline styles — only NEW class names, every value a\n// token that already exists. Ships with the markup so no\n// css file and no page template needs editing.\n// --------------------------------------------------\nconst HOME_STYLES = `\n<style id=\"navbuilder-styles\">\n    .nb-search-wrap { margin-bottom: var(--page-gap); }\n\n    .nb-search {\n        width: 100%;\n        box-sizing: border-box;\n        padding: 12px 16px;\n        font-family: var(--font-family);\n        font-size: var(--fs-small);\n        color: var(--c-light);\n        background: var(--form-surface);\n        border: var(--border-width-default) var(--border-style-default) var(--form-border);\n        border-radius: var(--form-radius);\n        outline: none;\n        transition: border-color var(--transition-base), box-shadow var(--transition-base);\n    }\n    .nb-search::placeholder { color: var(--form-muted); }\n    .nb-search:focus {\n        border-color: var(--form-accent);\n        box-shadow: var(--form-ring-size) var(--form-ring);\n    }\n\n    .nb-view[hidden] { display: none; }\n\n    .nb-crumb {\n        display: flex;\n        align-items: center;\n        justify-content: space-between;\n        gap: var(--btn-group-gap);\n        margin-bottom: var(--page-gap);\n    }\n\n    .nb-back {\n        background: transparent;\n        border: none;\n        padding: 4px 0;\n        cursor: pointer;\n        font-family: var(--font-family);\n        font-size: var(--fs-small);\n        font-weight: var(--fw-bold);\n        letter-spacing: 0.05em;\n        text-transform: uppercase;\n        color: var(--form-accent-light);\n        transition: color var(--transition-base);\n    }\n    .nb-back:hover { color: var(--form-accent); }\n\n    .nb-crumb-title {\n        font-size: var(--fs-small);\n        font-weight: var(--fw-bold);\n        letter-spacing: 0.06em;\n        text-transform: uppercase;\n        color: var(--c-content);\n    }\n\n    .nb-group-title {\n        font-size: var(--fs-small);\n        font-weight: var(--fw-bold);\n        letter-spacing: 0.06em;\n        text-transform: uppercase;\n        color: var(--form-muted);\n        margin-bottom: var(--btn-group-gap);\n    }\n\n    .nb-group { margin-bottom: var(--page-gap); }\n\n    .nb-empty {\n        font-size: var(--fs-small);\n        color: var(--form-muted);\n        padding: var(--btn-group-gap) 2px;\n    }\n\n    /* Count badge on a category tile */\n    .nb-count {\n        display: block;\n        margin-top: 4px;\n        font-size: var(--fs-small);\n        font-weight: var(--font-weight);\n        letter-spacing: 0;\n        text-transform: none;\n        color: var(--form-muted);\n    }\n</style>`;\n\n\n// --------------------------------------------------\n// 7. Markup helpers\n// --------------------------------------------------\n\n// A tile in the existing house style. `extra` lets us hang\n// data-cat / data-search on it without a second template.\nfunction tileHTML(opts) {\n    return `\n        <div class=\"tile-outer tile-div ${opts.className}\"${opts.extra || ''}>\n            <div class=\"tile-inner\">\n                <div class=\"tile-content\">\n                    <div class=\"tile-icon\">\n                        <img src=\"${ICON_BASE}${opts.icon}\" alt=\"${opts.label}\">\n                    </div>\n                    <div class=\"tile-label\"><span>${opts.label}${opts.sub || ''}</span></div>\n                </div>\n            </div>\n        </div>`;\n}\n\nfunction navButtonHTML(b) {\n    const tip = b.navLabel || b.label || b.key;\n    return `\n        <div class=\"menu-button  ${b.className} \" id=\"${b.className}\" data-href=\"${b.href}\" data-tooltip=\"${tip}\">\n            <img src=\"${ICON_BASE}${b.icon}\" alt=\"${tip}\" />\n        </div>`;\n}\n\nfunction esc(s) {\n    return String(s).replace(/\"/g, '&quot;');\n}\n\n\n// --------------------------------------------------\n// 8. Home body — category tiles + one view per category\n// --------------------------------------------------\nfunction buildHomeButtons() {\n\n    // Category grid. Falls back to the first tool's icon if\n    // the category has none of its own.\n    const catTiles = visible.map(cat => tileHTML({\n        className: 'nb-cat-tile',\n        icon: cat.icon || cat.items[0].icon,\n        label: cat.label,\n        sub: `<span class=\"nb-count\">${cat.items.length} tool${cat.items.length === 1 ? '' : 's'}</span>`,\n        extra: ` data-cat=\"${esc(cat.id)}\"`\n    })).join('\\n');\n\n    // One hidden view per category.\n    const catViews = visible.map(cat => `\n        <div class=\"nb-view\" data-view=\"${esc(cat.id)}\" hidden>\n            <div class=\"nb-crumb\">\n                <button type=\"button\" class=\"nb-back\">${BACK_LABEL}</button>\n                <span class=\"nb-crumb-title\">${cat.label}</span>\n            </div>\n            <div class=\"util-buttons\">\n                ${cat.items.map(i => tileHTML({\n                    className: i.className,\n                    icon: i.icon,\n                    label: i.label,\n                    extra: ` data-search=\"${esc((i.label + ' ' + (i.navLabel || '')).toLowerCase())}\"`\n                })).join('\\n')}\n            </div>\n        </div>`).join('\\n');\n\n    // Search results view — flat list, grouped by category so\n    // the user still sees where a tool lives.\n    const searchGroups = visible.map(cat => `\n        <div class=\"nb-group\" data-group=\"${esc(cat.id)}\">\n            <div class=\"nb-group-title\">${cat.label}</div>\n            <div class=\"util-buttons\">\n                ${cat.items.map(i => tileHTML({\n                    className: i.className,\n                    icon: i.icon,\n                    label: i.label,\n                    extra: ` data-search=\"${esc((i.label + ' ' + (i.navLabel || '')).toLowerCase())}\"`\n                })).join('\\n')}\n            </div>\n        </div>`).join('\\n');\n\n    return `${HOME_STYLES}\n        <div class=\"nb-search-wrap\">\n            <input type=\"text\" id=\"nb-search\" class=\"nb-search\" placeholder=\"Search tools…\" autocomplete=\"off\">\n        </div>\n\n        <div class=\"nb-view\" id=\"nb-categories\">\n            <div class=\"util-buttons\">${catTiles}</div>\n        </div>\n\n        ${catViews}\n\n        <div class=\"nb-view\" id=\"nb-results\" hidden>${searchGroups}</div>\n\n        <div class=\"nb-empty\" id=\"nb-empty\" hidden>No tools match that.</div>`;\n}\n\n\n// --------------------------------------------------\n// 9. Sidebar — flat, unchanged behaviour\n// --------------------------------------------------\nfunction buildNavButtons() {\n    const dynamic = visible\n        .reduce((acc, cat) => acc.concat(cat.items), [])\n        .filter(i => i.nav !== false)\n        .map(navButtonHTML);\n\n    return [\n        ...FIXED_NAV_TOP.map(navButtonHTML),\n        ...dynamic,\n        ...FIXED_NAV_BOT.map(navButtonHTML)\n    ].join('\\n');\n}\n\n\n// --------------------------------------------------\n// 10. Listeners — redirects (bind by className, so one call\n// covers both the tile and the sidebar button) plus the\n// drill-down and search wiring.\n// --------------------------------------------------\nfunction buildRedirectListeners() {\n    const targets = [\n        ...FIXED_NAV_TOP,\n        ...visible.reduce((acc, cat) => acc.concat(cat.items), []),\n        ...FIXED_NAV_BOT\n    ];\n\n    const calls = targets\n        .map(b => `addRedirectListener('${b.className}', '${b.href}');`)\n        .join('\\n        ');\n\n    // Category tiles deliberately do NOT get a redirect —\n    // they swap the view in place.\n    const wiring = `\n\n        /* ---- nav builder: drill-down + search ---- */\n        (function () {\n            var search = document.getElementById('nb-search');\n            if (!search) return;   /* not the home page */\n\n            var cats    = document.getElementById('nb-categories');\n            var results = document.getElementById('nb-results');\n            var empty   = document.getElementById('nb-empty');\n            var views   = [].slice.call(document.querySelectorAll('.nb-view[data-view]'));\n\n            function showCategories() {\n                cats.hidden = false;\n                results.hidden = true;\n                empty.hidden = true;\n                views.forEach(function (v) { v.hidden = true; });\n            }\n\n            function showCategory(id) {\n                cats.hidden = true;\n                results.hidden = true;\n                empty.hidden = true;\n                views.forEach(function (v) {\n                    v.hidden = v.getAttribute('data-view') !== id;\n                });\n                window.scrollTo(0, 0);\n            }\n\n            function showResults(term) {\n                cats.hidden = true;\n                views.forEach(function (v) { v.hidden = true; });\n                results.hidden = false;\n\n                var hits = 0;\n                results.querySelectorAll('.nb-group').forEach(function (g) {\n                    var shown = 0;\n                    g.querySelectorAll('.tile-div').forEach(function (el) {\n                        var match = (el.getAttribute('data-search') || '').indexOf(term) > -1;\n                        el.style.display = match ? '' : 'none';\n                        if (match) shown++;\n                    });\n                    g.style.display = shown ? '' : 'none';\n                    hits += shown;\n                });\n                empty.hidden = hits > 0;\n            }\n\n            /* Category tile → open that category */\n            document.addEventListener('click', function (e) {\n                var tile = e.target.closest('[data-cat]');\n                if (tile) { showCategory(tile.getAttribute('data-cat')); return; }\n                if (e.target.closest('.nb-back')) { search.value = ''; showCategories(); }\n            });\n\n            search.addEventListener('input', function () {\n                var term = search.value.trim().toLowerCase();\n                if (term) showResults(term);\n                else showCategories();\n            });\n        })();`;\n\n    return calls + wiring;\n}\n\n\n// --------------------------------------------------\n// 11. Build and attach\n// --------------------------------------------------\nmsg.homeButtons       = buildHomeButtons();\nmsg.navButtons        = buildNavButtons();\nmsg.redirectListeners = buildRedirectListeners();\n\nmsg.navBuilder = {\n    roles: userRoles,\n    categories: visible.map(c => ({ id: c.id, count: c.items.length })),\n    keys: visible.reduce((acc, c) => acc.concat(c.items.map(i => i.key)), []),\n    configSource: rawConfig ? 'NAV_CONFIG' : 'defaults'\n};\n\nreturn msg;",
         "outputs": 1,
-        "x": 380,
-        "y": 40,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 310,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "79aca9fe0562b702",
+        "type": "function",
+        "z": "c653681de39a873e",
+        "name": "UI Builder Logic",
+        "func": "// ====================================================\n// UI BUILDER\n// Reads msg.rbac set by the RBAC subflow (output 1).\n//\n// ENV:\n//   ICON_BASE — CDN prefix for icon URLs\n//\n// Output:\n//   msg.homeButtons       — tile grid HTML\n//   msg.navButtons        — sidebar nav HTML\n//   msg.redirectListeners — JS listener calls\n// ====================================================\n\n\n// --------------------------------------------------\n// 1. Safety check — rbac must exist\n// --------------------------------------------------\nif (!msg.rbac || !msg.rbac.userRole) {\n    node.warn('UI Builder: msg.rbac missing — is RBAC subflow wired to output 1?');\n    return null;\n}\n\n\n// --------------------------------------------------\n// 2. Config — icons CDN base\n// --------------------------------------------------\nconst ICON_BASE = env.get('ICON_BASE') || 'https://cdn.jsdelivr.net/gh/coppercloud-iotech/staticfiles/artline/';\n\n\n// --------------------------------------------------\n// 3. Tile definitions (home body)\n// --------------------------------------------------\nconst TILES = {\n    // orderbook:      { label: 'ORDER BOOK',   className: 'orderbook-button',        icon: 'artline-orderbook-icon.svg',       href: './orderbook' },\n    // greyproduction: { label: 'GREY PROD',    className: 'grey-production-button',  icon: 'artline-grey-production-icon.svg', href: './greyproduction' },\n    // greyqa:         { label: 'GREY QA',      className: 'grey-quality-button',     icon: 'artline-grey-qa-icon.svg',         href: './greyqa' },\n    // takaproduction: { label: 'TAKA PROD',    className: 'taka-production-button',  icon: 'artline-taka-production-icon.svg', href: './takaproduction' },\n    // monitor:        { label: 'M/C MONITOR',  className: 'stoppage-button',         icon: 'artline-monitor-icon.svg',         href: './monitor' },\n    // visitor:        { label: 'VISITOR',      className: 'visitor-button',          icon: 'artline-visitor-icon.svg',         href: './visitor' },\n    datasubmit: { label: 'FROM ', className: 'samplesubmission-button', icon: 'artline-orderbook-icon.svg', href: './datasubmit' }\n};\n\n\n// --------------------------------------------------\n// 4. Sidebar nav definitions\n// --------------------------------------------------\nconst NAV_BUTTONS = {\n    // orderbook:      { id: 'orderbook-button',        className: 'orderbook-button',        tooltip: 'Order Book',       icon: 'artline-orderbook-icon.svg',       href: './orderbook' },\n    // greyproduction: { id: 'grey-production-button',  className: 'grey-production-button',  tooltip: 'Grey Production',  icon: 'artline-grey-production-icon.svg', href: './greyproduction' },\n    // greyqa:         { id: 'grey-quality-button',     className: 'grey-quality-button',     tooltip: 'Grey Quality',     icon: 'artline-grey-qa-icon.svg',         href: './greyqa' },\n    // takaproduction: { id: 'taka-production-button',  className: 'taka-production-button',  tooltip: 'Taka Production',  icon: 'artline-taka-production-icon.svg', href: './takaproduction' },\n    // monitor:        { id: 'stoppage-button',         className: 'stoppage-button',         tooltip: 'Machine Stoppage', icon: 'artline-monitor-icon.svg',         href: './monitor' },\n    // visitor:        { id: 'visitor-button',          className: 'visitor-button',          tooltip: 'Visitor',          icon: 'artline-visitor-icon.svg',         href: './visitor' },\n    datasubmit: { id: 'samplesubmission-button', className: 'samplesubmission-button', tooltip: 'samplesubmission', icon: 'artline-orderbook-icon.svg', href: './datasubmit' }\n};\n\n\n// --------------------------------------------------\n// 5. Fixed nav — always rendered (not role-scoped)\n// --------------------------------------------------\nconst FIXED_NAV_TOP = [\n    { id: 'home-button',   className: 'home-button',   tooltip: 'Home',   icon: 'artline-home2-icon.svg',  href: './home' },\n];\n\nconst FIXED_NAV_BOTTOM = [\n    { id: 'logout-button', className: 'logout-button', tooltip: 'Logout', icon: 'artline-logout-icon.svg', href: './logout' },\n];\n\n\n// --------------------------------------------------\n// 6. Role → allowed keys\n// --------------------------------------------------\nconst ROLE_MAP = {\n    'admin': ['orderbook', 'greyproduction', 'greyqa', 'takaproduction', 'monitor', 'takamovement',\"datasubmit\"],\n    'manager': ['greyproduction', 'greyqa', 'takaproduction', 'monitor', 'takamovement',\"datasubmit\"],\n    'supervisor': ['greyproduction', 'greyqa', 'takaproduction', 'monitor', 'takamovement',\"datasubmit\"],\n    'gate':       ['visitor']\n};\n\n\n// --------------------------------------------------\n// 7. Helpers\n// --------------------------------------------------\nfunction navButtonHTML(b) {\n    return `\n        <div class=\"menu-button ${b.className}\" id=\"${b.id}\" data-tooltip=\"${b.tooltip}\">\n            <img src=\"${ICON_BASE}${b.icon}\" alt=\"${b.tooltip}\" />\n        </div>`;\n}\n\nfunction buildHomeButtons(keys) {\n    const tiles = keys\n        .filter(key => TILES[key])\n        .map(key => {\n            const t = TILES[key];\n            return `\n        <div class=\"tile-outer tile-div ${t.className}\">\n            <div class=\"tile-inner\">\n                <div class=\"tile-content\">\n                    <div class=\"tile-icon\">\n                        <img src=\"${ICON_BASE}${t.icon}\" alt=\"${t.label}\">\n                    </div>\n                    <div class=\"tile-label\"><span>${t.label}</span></div>\n                </div>\n            </div>\n        </div>`;\n        }).join('\\n');\n\n    return `<div class=\"util-buttons\" id=\"home-tiles\">${tiles}</div>`;\n}\n\nfunction buildNavButtons(keys) {\n    const top     = FIXED_NAV_TOP.map(navButtonHTML);\n    const dynamic = keys.filter(k => NAV_BUTTONS[k]).map(k => navButtonHTML(NAV_BUTTONS[k]));\n    const bottom  = FIXED_NAV_BOTTOM.map(navButtonHTML);\n    return [...top, ...dynamic, ...bottom].join('\\n');\n}\n\nfunction buildRedirectListeners(keys) {\n    const top = FIXED_NAV_TOP.map(b =>\n        `addRedirectListener('${b.className}', '${b.href}');`\n    );\n    const dynamic = keys\n        .filter(k => NAV_BUTTONS[k])\n        .map(k => {\n            const b = NAV_BUTTONS[k];\n            return `addRedirectListener('${b.className}', '${b.href}');`;\n        });\n    const bottom = FIXED_NAV_BOTTOM.map(b =>\n        `addRedirectListener('${b.className}', '${b.href}');`\n    );\n    return [...top, ...dynamic, ...bottom].join('\\n        ');\n}\n\n\n// --------------------------------------------------\n// 8. Resolve role → keys\n// --------------------------------------------------\nconst role = msg.rbac.userRole;\nconst keys = ROLE_MAP[role] ?? [];\n\nif (keys.length === 0) {\n    node.warn(`UI Builder: no ROLE_MAP entry for role=\"${role}\" — empty UI will render`);\n}\n\n\n// --------------------------------------------------\n// 9. Build and attach to msg\n// --------------------------------------------------\nmsg.homeButtons       = buildHomeButtons(keys);\nmsg.navButtons        = buildNavButtons(keys);\nmsg.redirectListeners = buildRedirectListeners(keys);\n\n// Also expose resolved role + keys for downstream debug/logging\nmsg.uiBuilder = {\n    role: role,\n    keys: keys\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 300,
+        "y": 80,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "cba0c72b3210de23",
+        "type": "debug",
+        "z": "c653681de39a873e",
+        "name": "debug 542",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 450,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "e6f6a12f787d6f80",
+        "type": "function",
+        "z": "c653681de39a873e",
+        "name": "UI Builder Logic Multi Role ",
+        "func": "// ====================================================\n// UI BUILDER\n// Reads msg.rbac set by the RBAC subflow (output 1).\n//\n// ENV:\n//   ICON_BASE — CDN prefix for icon URLs\n//\n// Output:\n//   msg.homeButtons       — tile grid HTML\n//   msg.navButtons        — sidebar nav HTML\n//   msg.redirectListeners — JS listener calls\n// ====================================================\n\n\n// --------------------------------------------------\n// 1. Safety check — rbac must exist\n// --------------------------------------------------\nif (!msg.rbac || (!msg.rbac.userRoles && !msg.rbac.userRole)) {\n    node.warn('UI Builder: msg.rbac missing — is RBAC subflow wired to output 1?');\n    return null;\n}\n\n\n// --------------------------------------------------\n// 2. Config — icons CDN base\n// --------------------------------------------------\nconst ICON_BASE = env.get('ICON_BASE') || 'https://cdn.jsdelivr.net/gh/coppercloud-iotech/staticfiles/artline/';\n\n\n// --------------------------------------------------\n// 3. Tile definitions (home body)\n// --------------------------------------------------\nconst TILES = {\n   \n    \"add-users\" : { label: 'addusers ', className: 'addusers-button', icon: 'artline-orderbook-icon.svg', href: './add-users' },\n    managerpage: { label: 'managerpage ', className: 'managerpage-button', icon: 'artline-orderbook-icon.svg', href: './managerpage' },\n    salespage: { label: 'salespage ', className: 'salespage-button', icon: 'artline-orderbook-icon.svg', href: './salespage' },\n    oppage: { label: 'oppage ', className: 'oppage-button', icon: 'artline-orderbook-icon.svg', href: './oppage' },\n    //Grafana Tile Testing\n    dashboard: { label: 'Dashboards', className: 'dashboard-button', icon: 'artline-orderbook-icon.svg', href: './dashboard' }\n\n};\n\n\n// --------------------------------------------------\n// 4. Sidebar nav definitions\n// --------------------------------------------------\nconst NAV_BUTTONS = {\n   \n    \"add-users\": { id: 'addusers-button', className: 'addusers-button', tooltip: 'addusers', icon: 'artline-orderbook-icon.svg', href: './add-users' },\n    managerpage: { id: 'managerpage-button', className: 'managerpage-button', tooltip: 'managerpage', icon: 'artline-orderbook-icon.svg', href: './managerpage' },\n    salespage: { id: 'salespage-button', className: 'salespage-button', tooltip: 'salespage', icon: 'artline-orderbook-icon.svg', href: './salespage' },\n    oppage: { id: 'oppage-button', className: 'oppage-button', tooltip: 'oppage', icon: 'artline-orderbook-icon.svg', href: './oppage' },\n    //GrafanaTile \n    dashboard: { id: 'dashboard-button', className: 'dashboard-button', tooltip: 'Dashboards', icon: 'artline-orderbook-icon.svg', href: './dashboard' }\n};\n\n\n// --------------------------------------------------\n// 5. Fixed nav — always rendered (not role-scoped)\n// --------------------------------------------------\nconst FIXED_NAV_TOP = [\n    { id: 'home-button', className: 'home-button', tooltip: 'Home', icon: 'artline-home2-icon.svg', href: './home' },\n];\n\nconst FIXED_NAV_BOTTOM = [\n    { id: 'logout-button', className: 'logout-button', tooltip: 'Logout', icon: 'artline-logout-icon.svg', href: './logout' },\n];\n\n\n// --------------------------------------------------\n// 6. Role → allowed keys\n// --------------------------------------------------\nconst ROLE_MAP = {\n    'admin':      [\"add-users\",\"dashboard\"/*changes for Grafana */],\n    'manager':    ['managerpage'],\n    'sales': ['salespage'],\n    'operator': ['oppage']\n};\n\n\n// --------------------------------------------------\n// 7. Helpers\n// --------------------------------------------------\nfunction navButtonHTML(b) {\n    return `\n        <div class=\"menu-button  ${b.className} \" id=\"${b.id}\" data-href=\"${b.href}\" data-tooltip=\"${b.tooltip}\">\n            <img src=\"${ICON_BASE}${b.icon}\" alt=\"${b.tooltip}\" />\n        </div>`;\n}\n\nfunction buildHomeButtons(keys) {\n    const tiles = keys\n        .filter(key => TILES[key])\n        .map(key => {\n            const t = TILES[key];\n            return `\n        <div class=\"tile-outer tile-div ${t.className}\">\n            <div class=\"tile-inner\">\n                <div class=\"tile-content\">\n                    <div class=\"tile-icon\">\n                        <img src=\"${ICON_BASE}${t.icon}\" alt=\"${t.label}\">\n                    </div>\n                    <div class=\"tile-label\"><span>${t.label}</span></div>\n                </div>\n            </div>\n        </div>`;\n        }).join('\\n');\n\n    return `<div class=\"util-buttons\" id=\"home-tiles\">${tiles}</div>`;\n}\n\nfunction buildNavButtons(keys) {\n    const top     = FIXED_NAV_TOP.map(navButtonHTML);\n    const dynamic = keys.filter(k => NAV_BUTTONS[k]).map(k => navButtonHTML(NAV_BUTTONS[k]));\n    const bottom  = FIXED_NAV_BOTTOM.map(navButtonHTML);\n    return [...top, ...dynamic, ...bottom].join('\\n');\n}\n\nfunction buildRedirectListeners(keys) {\n    const top = FIXED_NAV_TOP.map(b =>\n        `addRedirectListener('${b.className}', '${b.href}');`\n    );\n    const dynamic = keys\n        .filter(k => NAV_BUTTONS[k])\n        .map(k => {\n            const b = NAV_BUTTONS[k];\n            return `addRedirectListener('${b.className}', '${b.href}');`;\n        });\n    const bottom = FIXED_NAV_BOTTOM.map(b =>\n        `addRedirectListener('${b.className}', '${b.href}');`\n    );\n    return [...top, ...dynamic, ...bottom].join('\\n        ');\n}\n\n\n// --------------------------------------------------\n// 8. Resolve roles → keys (union across all roles)\n// --------------------------------------------------\n\n// get userRoles array — support both old (string) and new (array) format\nconst userRoles = msg.rbac.userRoles || [msg.rbac.userRole];\n\n// collect all allowed keys from each role, Set removes duplicates\nconst allKeys = [];\nfor (const role of userRoles) {\n    const roleKeys = ROLE_MAP[role.toLowerCase()] || [];\n    allKeys.push(...roleKeys);\n}\nconst keys = [...new Set(allKeys)];\n\nif (keys.length === 0) {\n    node.warn(`UI Builder: no ROLE_MAP entry for roles=[${userRoles.join(',')}] — empty UI will render`);\n}\n\n\n// --------------------------------------------------\n// 9. Build and attach to msg\n// --------------------------------------------------\nmsg.homeButtons       = buildHomeButtons(keys);\nmsg.navButtons        = buildNavButtons(keys);\nmsg.redirectListeners = buildRedirectListeners(keys);\n\nmsg.uiBuilder = {\n    roles: userRoles,\n    keys:  keys\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 600,
+        "y": 300,
         "wires": [
             [
-                "e6110207264b09a5"
+                "cba0c72b3210de23"
             ]
         ]
-    },
-    {
-        "id": "e6110207264b09a5",
-        "type": "mysql",
-        "z": "cb85b1c398c1c3ab",
-        "mydb": "8af565446e8ba893",
-        "name": "DB_CONFIG",
-        "x": 610,
-        "y": 40,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "1d13544cecdbbcc8",
-        "type": "catch",
-        "z": "cb85b1c398c1c3ab",
-        "name": "",
-        "scope": [
-            "e6110207264b09a5"
-        ],
-        "uncaught": false,
-        "x": 610,
-        "y": 100,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "8af565446e8ba893",
-        "type": "MySQLdatabase",
-        "name": "DB CONFIG ",
-        "host": "${DB_HOST}",
-        "port": "3306",
-        "db": "${DB_DBNAME}",
-        "tz": "",
-        "charset": "UTF8"
     },
     {
         "id": "d15be7953debce86",
@@ -1197,441 +747,1104 @@
         ]
     },
     {
-        "id": "sos_flow_tab",
+        "id": "3ad714a311044bff",
         "type": "tab",
-        "label": "SOS Library API",
+        "label": "User Management",
         "disabled": false,
-        "info": "SOS Alerts API - GET distinct alerts, POST new alert. No auth, no subflows."
+        "info": "",
+        "env": []
     },
     {
-        "id": "sos_http_in1",
-        "type": "http in",
-        "z": "sos_flow_tab",
-        "name": "GET /sos-alerts",
-        "url": "/sos-alerts",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 140,
-        "y": 100,
+        "id": "50adb2aa56c69033",
+        "type": "junction",
+        "z": "3ad714a311044bff",
+        "x": 2800,
+        "y": 440,
         "wires": [
             [
-                "e6cd7ee663a9364a"
+                "aa9901fd41e0e054"
             ]
         ]
     },
     {
-        "id": "sos_http_resp1",
-        "type": "http response",
-        "z": "sos_flow_tab",
-        "name": "HTTP Response - Alerts",
-        "statusCode": "",
-        "headers": {},
-        "x": 1830,
-        "y": 100,
-        "wires": []
-    },
-    {
-        "id": "sos_http_in2",
-        "type": "http in",
-        "z": "sos_flow_tab",
-        "name": "POST /sos-alert",
-        "url": "/sos-alert",
-        "method": "post",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 140,
-        "y": 200,
-        "wires": [
-            [
-                "ba2c0f4b0e2e7a71"
-            ]
-        ]
-    },
-    {
-        "id": "sos_func_success2",
+        "id": "e26de17dcfb57180",
         "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Success Response",
-        "func": "try {\n    // If DB returned an error\n    if (msg.error) {\n        throw new Error(msg.error.message || \"Database operation failed\");\n    }\n\n    // Success response\n    msg.statusCode = 200;\n\n    msg.payload = {\n        success: true,\n        message: \"SOS Alert Saved Successfully\"\n    };\n\n} catch (err) {\n\n    // Error response\n    msg.statusCode = 500;\n\n    msg.payload = {\n        success: false,\n        message: \"Failed to save SOS Alert\",\n        error: err.message\n    };\n\n    node.error(\"SOS Alert Error: \" + err.message, msg);\n}\n\nreturn msg;",
+        "z": "3ad714a311044bff",
+        "name": "Build Search Query",
+        "func": "const q = String(msg.req.query.q || '').trim();\nconst includeInactive = msg.req.query.includeInactive === '1';\n\nlet where = [];\nlet params = [];\n\nif (q) {\n    where.push(\"(username LIKE ? OR userdisplayname LIKE ?)\");\n    const term = `%${q}%`;\n    params.push(term, term);\n}\n\nif (!includeInactive) {\n    where.push(\"active = 'Y'\");\n}\n\nconst whereClause = where.length\n    ? \"WHERE \" + where.join(\" AND \")\n    : \"\";\n\nmsg.payload = params;\n\nmsg.topic = `\nSELECT\n    recid,\n    COALESCE(NULLIF(TRIM(userid), ''), 'N/A') AS userid,\n    username,\n    userdisplayname,\n    email,\n    userrole,\n    active\nFROM users\n${whereClause}\nORDER BY username ASC;\n`;\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 2110,
-        "y": 180,
+        "x": 710,
+        "y": 700,
         "wires": [
             [
-                "sos_http_resp2",
-                "d3b67cf24c42dbec"
+                "d922dd87c461e04b"
             ]
         ]
     },
     {
-        "id": "sos_http_resp2",
+        "id": "3e1fcc58bf78fb6e",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Format Response",
+        "func": "// DB returns rows in msg.payload\nmsg.payload = msg.payload; // already an array of row objects\nmsg.statusCode = 200;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1170,
+        "y": 700,
+        "wires": [
+            [
+                "5c9212df46f370f5"
+            ]
+        ]
+    },
+    {
+        "id": "1ff7434ec6089e50",
         "type": "http response",
-        "z": "sos_flow_tab",
-        "name": "HTTP Response - Alert Save",
+        "z": "3ad714a311044bff",
+        "name": "",
         "statusCode": "",
         "headers": {},
-        "x": 2400,
-        "y": 200,
+        "x": 1550,
+        "y": 120,
         "wires": []
     },
     {
-        "id": "29ef124d192bb0a5",
-        "type": "http in",
-        "z": "sos_flow_tab",
-        "name": "",
-        "url": "/sos-test",
-        "method": "get",
-        "upload": false,
-        "swaggerDoc": "",
-        "x": 150,
-        "y": 320,
-        "wires": [
-            [
-                "67942bd65be0c9c2"
-            ]
-        ]
-    },
-    {
-        "id": "67942bd65be0c9c2",
+        "id": "eaea797b47293585",
         "type": "template",
-        "z": "sos_flow_tab",
-        "name": "",
+        "z": "3ad714a311044bff",
+        "name": "source code",
         "field": "payload",
         "fieldType": "msg",
         "format": "handlebars",
         "syntax": "mustache",
-        "template": "<!DOCTYPE html>\n<html>\n<head>\n    <meta charset=\"UTF-8\">\n    <title>SOS  Library Test</title>\n<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/gh/Sudarshan2905/Reusable-SOS-Alert-Library@main/new-sos.css\">\n</head>\n\n<body style=\"padding:40px;font-family:Arial\">\n\n    <h2>SOS Library Test</h2>\n\n    <button id=\"btnSOS\" class=\"sos-trigger\">\n        SOS\n    </button>\n\n    <script src=\"https://cdn.jsdelivr.net/gh/Sudarshan2905/Reusable-SOS-Alert-Library@main/sos3.js\"></script>\n\n    <script>\n    document.addEventListener(\"DOMContentLoaded\", function () {\n\n        SOS.init({\n\n            button: \"#btnSOS\",\n\n\n            apiBase: \"https://ux.integro.coppercloud.in/app\"\n\n        });\n\n    });\n    </script>\n\n</body>\n</html>",
+        "template": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n  <title>CopperCloud — Manage Users</title>\n  <meta name=\"description\" content=\"Search, edit, and manage user accounts.\" />\n  <meta name=\"robots\" content=\"noindex, nofollow\" />\n  <link rel=\"icon\" type=\"image/svg+xml\" href=\"https://d14v8zihtgkcf4.cloudfront.net/artline/favicon.svg\" />\n  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n  <link href=\"https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />\n  <link href=\"https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css\" rel=\"stylesheet\" />\n  <link rel=\"stylesheet\" href=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/core.css\" />\n  <link rel=\"stylesheet\" href=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/brand.css\" />\n  <link rel=\"stylesheet\" href=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/form.css\" />\n\n  <style>\n    /* ─────────────────────────────────────────────────────────────\n       Page-specific layout — Search Users\n       Permitted under Section 4.4: layout variation not in the\n       library, uses only tokens, does not override any library class.\n       ───────────────────────────────────────────────────────────── */\n\n    /* Undocumented Pattern (Section 8.4): the results table needs more\n       horizontal room than the standard 560px .page-wrap. No\n       --page-wrap-max-width-lg token exists yet. This modifier only\n       touches max-width (never padding/margin/border, per the Page\n       Wrapper rule in Section 6.1) and is implemented as the closest\n       compliant equivalent pending formal design-system approval of a\n       \"wide page wrap\" variant. */\n    .page-wrap--wide { max-width: 1300px; }\n\n    .search-bar {\n      display: grid;\n      grid-template-columns: 1fr auto;\n      gap: var(--btn-group-gap);\n      align-items: start;\n    }\n    .search-bar .field { margin: 0; }\n    .search-bar .btn { width: auto; white-space: nowrap; }\n\n    /* Generic visibility utility — replaces forbidden inline\n       style=\"display:none\" outside the three permitted exceptions\n       (Section 3.6). Toggled via classList in the page script. */\n    .is-hidden { display: none; }\n\n    .data-table-wrap { overflow-x: auto; margin-top: var(--page-gap); }\n    .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); color: var(--c-content); }\n    .data-table th {\n      text-align: left;\n      font-size: var(--fs-small);\n      font-weight: var(--fw-bold);\n      color: var(--form-accent-light);\n      padding: var(--btn-group-gap);\n      border-bottom: var(--border-width-default) var(--border-style-default) var(--c-border);\n      white-space: nowrap;\n    }\n    .data-table td {\n      padding: var(--btn-group-gap);\n      border-bottom: var(--border-width-default) var(--border-style-default) var(--c-border);\n      vertical-align: middle;\n    }\n    .data-table tr:last-child td { border-bottom: none; }\n\n    /* Undocumented Pattern (Section 8.4): status badge is not in the\n       Section 6 catalog. Built entirely from existing semantic status\n       tokens. Vertical padding has no matching spacing token — flagged\n       for a --badge-padding-y token to be added to form.css; the\n       closest existing token (--btn-group-gap) is used for the\n       horizontal padding in the meantime. */\n    .badge {\n      display: inline-block;\n      padding: 2px var(--btn-group-gap);\n      border-radius: var(--radius-sm);\n      font-size: var(--fs-small);\n      font-weight: var(--fw-bold);\n    }\n    .badge-active {\n      background: var(--color-success-bg);\n      border: var(--border-width-default) var(--border-style-default) var(--color-success-border);\n      color: var(--color-success);\n    }\n    .badge-inactive {\n      background: var(--color-error-bg);\n      border: var(--border-width-default) var(--border-style-default) var(--color-error-border);\n      color: var(--form-error);\n    }\n\n    .tbl-actions { display: flex; gap: var(--btn-group-gap); flex-wrap: wrap; }\n\n    /* Undocumented Pattern (Section 8.4): compact table-row action\n       buttons. The library has no .btn-success / .btn-warning variant\n       and no compact-size button, so this is built from approved\n       semantic color tokens only (no hardcoded color anywhere). The\n       4px half of the padding has no matching token — flagged for a\n       --btn-compact-padding-y token to be added to form.css. Border is\n       fully token-composed per Section 4.6; per-variant rules override\n       border-color only, which Section 4.6 explicitly permits. */\n    .tbl-btn {\n      padding: 4px var(--btn-group-gap);\n      border-radius: var(--radius-sm);\n      background: transparent;\n      font-size: var(--fs-small);\n      font-weight: var(--fw-bold);\n      cursor: pointer;\n      font-family: var(--font-family);\n      transition: var(--btn-transition);\n      white-space: nowrap;\n      border: var(--border-width-default) var(--border-style-default) var(--accent-primary);\n      color: var(--accent-primary);\n    }\n    .tbl-btn:hover { background: var(--color-info-bg); }\n    .tbl-btn-danger { border-color: var(--form-error); color: var(--form-error); }\n    .tbl-btn-danger:hover { background: var(--color-error-bg); }\n    .tbl-btn-success { border-color: var(--color-success); color: var(--color-success); }\n    .tbl-btn-success:hover { background: var(--color-success-bg); }\n    .tbl-btn-warning { border-color: var(--color-warning); color: var(--color-warning); }\n    .tbl-btn-warning:hover { background: var(--color-warning-bg); }\n\n    .no-results { text-align: center; color: var(--c-muted); font-size: var(--fs-small); padding: var(--page-wrap-gap) 0; }\n\n    /* Replaces the forbidden inline style=\"margin-top:...\" previously\n       on the Save Changes button-group inside the Edit User modal. */\n    .edit-modal-actions { margin-top: var(--form-gap); }\n\n    /* Undocumented Pattern (Section 8.4): credential-display grid for\n       the reset-success modal is not in the Section 6 catalog. Built\n       from existing tokens only; --btn-group-gap and --section-gap are\n       used as the closest available approximations for the original\n       12px/14px/16px literals, flagged for formal spacing-token review. */\n    .cred-grid {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: var(--btn-group-gap);\n      margin-top: var(--section-gap);\n    }\n    .cred-box {\n      background: var(--form-surface);\n      border: var(--border-width-default) var(--border-style-default) var(--form-border);\n      border-radius: var(--form-radius);\n      padding: var(--btn-group-gap) var(--section-gap);\n    }\n    .cred-box-label {\n      font-size: var(--fs-small);\n      color: var(--form-muted);\n      margin-bottom: var(--btn-group-gap);\n    }\n    .cred-box-value {\n      font-size: var(--fs-input);\n      font-weight: var(--fw-bold);\n      color: var(--form-accent);\n    }\n\n    @media (max-width: 520px) {\n      .search-bar { grid-template-columns: 1fr; }\n      .search-bar .btn { width: 100%; }\n      .cred-grid { grid-template-columns: 1fr; }\n    }\n  </style>\n</head>\n<body>\n  <div class=\"main-div\">\n    <div class=\"header\">\n      <div class=\"sidebar\" id=\"sidebar\">\n        <div class=\"sidebar-util-section\">\n          <div class=\"menu-button menu-icon\" id=\"menu-toggle-button\">\n            <img src=\"https://d14v8zihtgkcf4.cloudfront.net/artline/menu-icon.svg\" alt=\"Menu\" id=\"menu-toggle-icon\" />\n          </div>\n        {{{navButtons}}}\n        </div>\n      </div>\n      <div class=\"branding\">\n        <img src=\"https://d14v8zihtgkcf4.cloudfront.net/artline/artlinelogo.png\" alt=\"CopperCloud Logo\" />\n      </div>\n    </div>\n\n    <div class=\"body\">\n      <div class=\"page-wrap page-wrap--wide\">\n\n        <!-- [1] Page heading -->\n        <div>\n          <div class=\"page-title\">Manage Users</div>\n          <div class=\"page-subtitle\">Find, edit, and manage user accounts.</div>\n        </div>\n\n        <!-- [2] Content sections -->\n        <div class=\"form-section\" id=\"search-form-section\">\n          <div class=\"section-heading\">Search</div>\n          <div class=\"search-bar\">\n            <div class=\"field\" id=\"field-search-query\">\n              <input class=\"inp\" type=\"text\" id=\"inp-search-query\" placeholder=\" \" />\n              <label class=\"lbl\" for=\"inp-search-query\">Search by username or display name</label>\n            </div>\n            <button class=\"btn\" type=\"button\" id=\"btn-search-users\">Search</button>\n          </div>\n          <div class=\"field\" id=\"field-include-inactive\">\n            <label class=\"check-field\">\n              <input type=\"checkbox\" id=\"inp-include-inactive\" />\n              <span class=\"check-lbl\">Include inactive users</span>\n            </label>\n          </div>\n        </div>\n\n        <div class=\"form-section is-hidden\" id=\"results-section\">\n          <div class=\"section-heading\">Results</div>\n          <div class=\"data-table-wrap\">\n            <table class=\"data-table\" id=\"results-table\">\n              <thead>\n                <tr>\n                  <th scope=\"col\">User ID</th>\n                  <th scope=\"col\">Username</th>\n                  <th scope=\"col\">Display Name</th>\n                  <th scope=\"col\">Email</th>\n                  <th scope=\"col\">Roles</th>\n                  <th scope=\"col\">Status</th>\n                  <th scope=\"col\">Actions</th>\n                </tr>\n              </thead>\n              <tbody id=\"results-tbody\"></tbody>\n            </table>\n            <div class=\"no-results is-hidden\" id=\"no-results-msg\">No users found.</div>\n          </div>\n        </div>\n\n        <!-- [3] Actions — always last -->\n        <div class=\"form-section\">\n          <div class=\"section-heading\">Actions</div>\n          <div class=\"btn-group\">\n            <button class=\"btn-tertiary\" type=\"button\" id=\"btn-clear-search\">Clear Search</button>\n          </div>\n        </div>\n\n      </div>\n    </div>\n  </div>\n\n  <!-- Edit User modal -->\n  <div class=\"modal modal-info\" id=\"modal-edit-user\" style=\"display:none\">\n    <div class=\"modal-header\">\n      <span class=\"modal-title\">Edit User</span>\n      <button class=\"modal-close\" type=\"button\" id=\"btn-edit-close\" aria-label=\"Close\">✕</button>\n    </div>\n    <div class=\"modal-body\">\n      <div class=\"section-heading\" id=\"edit-modal-subtitle\">Editing: —</div>\n      <div class=\"form\">\n        <div class=\"field\" id=\"field-edit-displayname\">\n          <input class=\"inp\" type=\"text\" id=\"inp-edit-displayname\" placeholder=\" \" />\n          <label class=\"lbl\" for=\"inp-edit-displayname\">Display Name</label>\n        </div>\n        <div class=\"field\" id=\"field-edit-email\">\n          <input class=\"inp\" type=\"text\" id=\"inp-edit-email\" placeholder=\" \" />\n          <label class=\"lbl\" for=\"inp-edit-email\">Email</label>\n        </div>\n        <div class=\"field\" id=\"field-edit-roles\">\n          <select id=\"inp-edit-roles\" multiple style=\"width:100%\"></select>\n        </div>\n      </div>\n      <!-- Save button lives in modal-body so openModal() does NOT\n           auto-wire it as a close trigger — validation must pass first -->\n      <div class=\"btn-group edit-modal-actions\">\n        <button class=\"btn-primary\" type=\"button\" id=\"btn-edit-save\">Save Changes</button>\n      </div>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn-tertiary\" type=\"button\" id=\"btn-edit-cancel\">Cancel</button>\n    </div>\n  </div>\n\n  <!-- Deactivate confirm modal -->\n  <div class=\"modal modal-error\" id=\"modal-deactivate\" style=\"display:none\">\n    <div class=\"modal-header\">\n      <span class=\"modal-title\">Deactivate User</span>\n      <button class=\"modal-close\" type=\"button\" id=\"btn-deactivate-close\" aria-label=\"Close\">✕</button>\n    </div>\n    <div class=\"modal-body\">\n      <div class=\"msg-box msg-box-error\">\n        <span class=\"msg-box-icon\">✕</span>\n        <div class=\"msg-box-body\">\n          <div class=\"msg-box-title\">Are you sure?</div>\n          <div class=\"msg-box-text\" id=\"deactivate-body\">This user will be deactivated. Their data is preserved and they can be reactivated later.</div>\n        </div>\n      </div>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn-tertiary\" type=\"button\" id=\"btn-deactivate-cancel\">Cancel</button>\n      <button class=\"btn-danger\" type=\"button\" id=\"btn-deactivate-confirm\">Deactivate</button>\n    </div>\n  </div>\n\n  <!-- Reset credentials — confirm modal -->\n  <div class=\"modal modal-warning\" id=\"modal-reset-confirm\" style=\"display:none\">\n    <div class=\"modal-header\">\n      <span class=\"modal-title\">Reset Credentials</span>\n      <button class=\"modal-close\" type=\"button\" id=\"btn-reset-confirm-close\" aria-label=\"Close\">✕</button>\n    </div>\n    <div class=\"modal-body\">\n      <div class=\"msg-box msg-box-warning\">\n        <span class=\"msg-box-icon\">⚠</span>\n        <div class=\"msg-box-body\">\n          <div class=\"msg-box-title\">Reset password and PIN?</div>\n          <div class=\"msg-box-text\" id=\"reset-confirm-body\">\n            This will reset the credentials for this user. The new password and PIN will be shown after confirmation.\n          </div>\n        </div>\n      </div>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn-tertiary\" type=\"button\" id=\"btn-reset-confirm-cancel\">Cancel</button>\n      <button class=\"btn-primary\" type=\"button\" id=\"btn-reset-confirm\">Yes, Reset</button>\n    </div>\n  </div>\n\n  <!-- Reset credentials — success modal showing new credentials -->\n  <div class=\"modal modal-success\" id=\"modal-reset-success\" style=\"display:none\">\n    <div class=\"modal-header\">\n      <span class=\"modal-title\">Credentials Reset</span>\n      <button class=\"modal-close\" type=\"button\" id=\"btn-reset-success-close\" aria-label=\"Close\">✕</button>\n    </div>\n    <div class=\"modal-body\">\n      <div class=\"msg-box msg-box-success\">\n        <span class=\"msg-box-icon\">✓</span>\n        <div class=\"msg-box-body\">\n          <div class=\"msg-box-title\">Reset successful</div>\n          <div class=\"msg-box-text\" id=\"reset-success-username\">Credentials have been reset.</div>\n        </div>\n      </div>\n      <div class=\"cred-grid\">\n        <div class=\"cred-box\">\n          <div class=\"cred-box-label\">New Password</div>\n          <div class=\"cred-box-value\" id=\"reset-display-password\">User@123</div>\n        </div>\n        <div class=\"cred-box\">\n          <div class=\"cred-box-label\">New PIN</div>\n          <div class=\"cred-box-value\" id=\"reset-display-pin\">1234</div>\n        </div>\n      </div>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn-primary\" type=\"button\" id=\"btn-reset-success-done\">Done</button>\n    </div>\n  </div>\n\n  <!-- ═══ GLOBAL OVERLAYS — never move, never remove ═══ -->\n  <div id=\"modal-backdrop\"></div>\n  <div class=\"toast-container top-right\" id=\"toast-container\"></div>\n  <div id=\"tooltip\"></div>\n\n  <!-- ═══ SCRIPTS — mandatory load order ═══ -->\n  <script src=\"https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js\"></script>\n  <script src=\"https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js\"></script>\n  <script src=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/utils.js\"></script>\n  <script src=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/core.js\"></script>\n  <script>\n    /**\n     * js/pages/search-users.js\n     * CopperCloud — Search Users\n     * CopperCloud Design System — Page Script\n     *\n     * Section order (mandatory):\n     *   1. SELECT2 INIT\n     *   2. NAVIGATION LISTENERS\n     *   3. VALIDATION RULES\n     *   4. STATE & HELPERS\n     *   5. SUBMIT HANDLER (Save Changes)\n     *   6. CLEAR HANDLER (Clear Search)\n     *   7. ADDITIONAL HANDLERS (search, deactivate, reactivate, reset, table router)\n     */\n\n    document.addEventListener('DOMContentLoaded', () => {\n\n      // ─────────────────────────────────────────────────────────────\n      // 1. SELECT2 INIT\n      // ─────────────────────────────────────────────────────────────\n      initSelect2('inp-edit-roles', {\n        placeholder: 'Select role(s)…',\n        allowClear: true,\n        closeOnSelect: false\n    });\n\n      // ─────────────────────────────────────────────────────────────\n  // PAGE-SPECIFIC MODAL BEHAVIOR\n  // Prevent clicking outside the modal from closing it.\n  // X / Cancel buttons will continue to work normally.\n  // ─────────────────────────────────────────────────────────────\n  const modalBackdrop = document.getElementById('modal-backdrop');\n\n    if (modalBackdrop) {\n      modalBackdrop.addEventListener('click', (event) => {\n        if (event.target === modalBackdrop) {\n          event.stopPropagation();\n        }\n      }, true);\n    }\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 2. NAVIGATION LISTENERS\n      // ─────────────────────────────────────────────────────────────\n      {{{redirectListeners}}}\n      addRedirectListener('nav-profile', './profile');\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 3. VALIDATION RULES\n      // ─────────────────────────────────────────────────────────────\n      // EDIT_RULES defines the validation spec for every field in the\n      // Edit User modal. validateForm(EDIT_RULES) is called in the\n      // Save Changes handler before any API call is made.\n      const EDIT_RULES = {\n        'inp-edit-displayname': {\n          required: true,\n          requiredMessage: 'Display Name is required.',\n          minLength: 2,\n          minLengthMessage: 'Display Name must be at least 2 characters.',\n          maxLength: 100,\n          maxLengthMessage: 'Display Name must not exceed 100 characters.',\n        },\n        'inp-edit-email': {\n          required: false,\n          type: 'email',\n          typeMessage: 'Enter a valid email address.',\n        },\n        'inp-edit-roles': {\n          required: true,\n          requiredMessage: 'At least one role must be selected.',\n        },\n      };\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 4. STATE & HELPERS\n      // ─────────────────────────────────────────────────────────────\n      let editingUser            = null;\n      let pendingDeactivateRecid = null;\n      let pendingResetRecid      = null;\n      let pendingResetName       = '';\n\n      const parseRoles = (u) => {\n        try {\n          const r2 = typeof u.userrole === 'string' ? JSON.parse(u.userrole) : u.userrole;\n          if (Array.isArray(r2)) return r2;\n        } catch (e) { /* fall through */ }\n        return u.userrole ? [u.userrole] : [];\n      };\n\n      const collectEditData = () => ({\n        action:      'update',\n        recid:       editingUser.recid,\n        displayname: getFieldValue('inp-edit-displayname'),\n        email:       getFieldValue('inp-edit-email'),\n        roles:       $('#inp-edit-roles').val() || [],\n      });\n\n      // Roles loader — populates the edit modal Select2 with server roles\n      const loadRoles = async () => {\n        try {\n          const result = await apiCall('./get-roles-db', { method: 'POST' });\n          const roles  = result.payload || [];\n          const $sel   = $('#inp-edit-roles');\n          $sel.empty();\n          roles.forEach(r => $sel.append(new Option(r.role_label, r.role, false, false)));\n          $sel.trigger('change');\n        } catch (err) {\n          openToast(`Failed to load roles: ${err.message}`, 'error', 7000);\n        }\n      };\n\n      // HTML-escape helper for rendering table cells safely\n      const esc = (v) => v == null ? '' : String(v)\n        .replace(/&/g, '&amp;').replace(/</g, '&lt;')\n        .replace(/>/g, '&gt;').replace(/\"/g, '&quot;');\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 5. SUBMIT HANDLER — Save Changes (Edit User modal)\n      // ─────────────────────────────────────────────────────────────\n      document.getElementById('btn-edit-save').addEventListener('click', async () => {\n\n        // Step 1: Validate\n        const allValid = validateForm(EDIT_RULES);\n        if (!allValid) {\n          openToast('Please fix the highlighted errors before saving.', 'error');\n          document.querySelector('#modal-edit-user .field--invalid')\n            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });\n          return;\n        }\n\n        // Step 2: Collect\n        const payload = collectEditData();\n\n        // Step 3: Load → API → Respond\n        setLoading('btn-edit-save', true, 'Saving…');\n        try {\n          await apiCall('./manage-user', { method: 'POST', body: payload });\n          closeModal('modal-edit-user');\n          openToast('User updated successfully.', 'success', 4000);\n          searchUsers();\n        } catch (err) {\n          openToast(`Save failed: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading('btn-edit-save', false);\n        }\n      });\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 6. CLEAR HANDLER — Clear Search\n      // ─────────────────────────────────────────────────────────────\n      document.getElementById('btn-clear-search').addEventListener('click', () => {\n        clearForm('#search-form-section');\n        document.getElementById('results-section').classList.add('is-hidden');\n        document.getElementById('results-tbody').innerHTML = '';\n      });\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 7. ADDITIONAL HANDLERS\n      // ─────────────────────────────────────────────────────────────\n\n      // ── Search ───────────────────────────────────────────────────\n      const searchUsers = async () => {\n        const q               = getFieldValue('inp-search-query').trim();\n        const includeInactive = document.getElementById('inp-include-inactive').checked;\n        const params = new URLSearchParams();\n        if (q) params.set('q', q);\n        params.set('includeInactive', includeInactive ? '1' : '0');\n\n        setLoading('btn-search-users', true, 'Searching…');\n        try {\n          const users = await apiCall(`./search-users?${params.toString()}`, { method: 'GET' });\n          renderResults(users);\n        } catch (err) {\n          openToast(`Error searching users: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading('btn-search-users', false);\n        }\n      };\n\n      const renderResults = (users) => {\n        const section = document.getElementById('results-section');\n        const tbody   = document.getElementById('results-tbody');\n        const noMsg   = document.getElementById('no-results-msg');\n        const table   = document.getElementById('results-table');\n\n        section.classList.remove('is-hidden');\n        tbody.innerHTML = '';\n\n        if (!users || users.length === 0) {\n          table.classList.add('is-hidden');\n          noMsg.classList.remove('is-hidden');\n          return;\n        }\n        table.classList.remove('is-hidden');\n        noMsg.classList.add('is-hidden');\n\n        users.forEach((u) => {\n          const isActive    = (u.active || '').toUpperCase() !== 'N';\n          const roles = parseRoles(u)\n            .map(role => {\n                const r = String(role).toLowerCase();\n                return r.charAt(0).toUpperCase() + r.slice(1);\n            })\n            .join(', ');\n          const statusBadge = isActive\n            ? '<span class=\"badge badge-active\">Active</span>'\n            : '<span class=\"badge badge-inactive\">Inactive</span>';\n\n          let actionBtns =\n            `<button type=\"button\" class=\"tbl-btn\" id=\"btn-edit-${esc(u.recid)}\" data-action=\"edit\" data-recid=\"${esc(u.recid)}\">Edit</button>` +\n            `<button type=\"button\" class=\"tbl-btn tbl-btn-warning\" id=\"btn-reset-${esc(u.recid)}\" data-action=\"reset\" data-recid=\"${esc(u.recid)}\" data-name=\"${esc(u.userdisplayname || u.username)}\">Reset Credentials</button>`;\n\n          actionBtns += isActive\n            ? `<button type=\"button\" class=\"tbl-btn tbl-btn-danger\" id=\"btn-deactivate-${esc(u.recid)}\" data-action=\"deactivate\" data-recid=\"${esc(u.recid)}\" data-name=\"${esc(u.userdisplayname || u.username)}\">Deactivate</button>`\n            : `<button type=\"button\" class=\"tbl-btn tbl-btn-success\" id=\"btn-reactivate-${esc(u.recid)}\" data-action=\"reactivate\" data-recid=\"${esc(u.recid)}\">Reactivate</button>`;\n\n          const tr = document.createElement('tr');\n          tr.setAttribute('data-recid', u.recid);\n          tr.setAttribute('data-user', JSON.stringify(u));\n          tr.innerHTML =\n            `<td>${esc(u.userid)}</td>` +\n            `<td>${esc(u.username)}</td>` +\n            `<td>${esc(u.userdisplayname)}</td>` +\n            `<td>${esc(u.email)}</td>` +\n            `<td>${esc(roles)}</td>` +\n            `<td>${statusBadge}</td>` +\n            `<td><div class=\"tbl-actions\">${actionBtns}</div></td>`;\n          tbody.appendChild(tr);\n        });\n      };\n\n      // ── Edit modal open ──────────────────────────────────────────\n      const openEditModal = async (u, btnId) => {\n        editingUser = u;\n        document.getElementById('inp-edit-displayname').value = u.userdisplayname || '';\n        document.getElementById('inp-edit-email').value       = u.email           || '';\n        if (btnId) setLoading(btnId, true, 'Loading…');\n        try {\n          await loadRoles();\n          $('#inp-edit-roles').val(parseRoles(u)).trigger('change');\n          document.getElementById('edit-modal-subtitle').textContent =\n            `Editing: ${u.username || ('recid ' + u.recid)}`;\n          openModal('modal-edit-user');\n        } finally {\n          if (btnId) setLoading(btnId, false);\n        }\n      };\n\n      // ── Deactivate ───────────────────────────────────────────────\n      document.getElementById('btn-deactivate-confirm').addEventListener('click', async () => {\n        if (!pendingDeactivateRecid) return;\n        const recid = pendingDeactivateRecid;\n        closeModal('modal-deactivate');\n        setLoading('btn-deactivate-confirm', true, 'Deactivating…');\n        try {\n          await apiCall('./manage-user', { method: 'POST', body: { recid, action: 'deactivate' } });\n          openToast('User deactivated.', 'success', 4000);\n          searchUsers();\n        } catch (err) {\n          openToast(`Error deactivating user: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading('btn-deactivate-confirm', false);\n          pendingDeactivateRecid = null;\n        }\n      });\n\n      // ── Reactivate ───────────────────────────────────────────────\n      const reactivateUser = async (recid, btnId) => {\n        setLoading(btnId, true, 'Reactivating…');\n        try {\n          await apiCall('./manage-user', { method: 'POST', body: { recid, action: 'reactivate' } });\n          openToast('User reactivated.', 'success', 4000);\n          searchUsers();\n        } catch (err) {\n          openToast(`Error reactivating user: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading(btnId, false);\n        }\n      };\n\n      // ── Reset credentials ────────────────────────────────────────\n      document.getElementById('btn-reset-confirm').addEventListener('click', async () => {\n        if (!pendingResetRecid) return;\n        const recid = pendingResetRecid;\n        closeModal('modal-reset-confirm');\n        setLoading('btn-reset-confirm', true, 'Resetting…');\n        try {\n          await apiCall('./reset-credentials', { method: 'POST', body: { recid } });\n          document.getElementById('reset-success-username').textContent =\n            `Credentials for \"${pendingResetName}\" have been reset.`;\n          document.getElementById('reset-display-password').textContent = 'User@123';\n          document.getElementById('reset-display-pin').textContent      = '1234';\n          openModal('modal-reset-success');\n        } catch (err) {\n          openToast(`Reset failed: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading('btn-reset-confirm', false);\n          pendingResetRecid = null;\n          pendingResetName  = '';\n        }\n      });\n\n      // ── Table click router ───────────────────────────────────────\n      document.getElementById('btn-search-users').addEventListener('click', searchUsers);\n\n      document.getElementById('inp-search-query').addEventListener('keydown', (e) => {\n        if (e.key === 'Enter') searchUsers();\n      });\n\n      document.getElementById('inp-include-inactive').addEventListener('change', searchUsers);\n\n      document.getElementById('results-tbody').addEventListener('click', (event) => {\n        const btn    = event.target.closest('[data-action]');\n        if (!btn) return;\n        const action = btn.getAttribute('data-action');\n        const recid  = btn.getAttribute('data-recid');\n        const name   = btn.getAttribute('data-name') || recid;\n        const tr     = btn.closest('tr');\n\n        if (action === 'edit') {\n          openEditModal(JSON.parse(tr.getAttribute('data-user')), btn.id);\n\n        } else if (action === 'reset') {\n          pendingResetRecid = recid;\n          pendingResetName  = name;\n          document.getElementById('reset-confirm-body').textContent =\n            `This will reset the password and PIN for \"${name}\". The new credentials will be shown after confirmation.`;\n          openModal('modal-reset-confirm');\n\n        } else if (action === 'deactivate') {\n          pendingDeactivateRecid = recid;\n          document.getElementById('deactivate-body').textContent =\n            `Are you sure you want to deactivate \"${name}\"? Their data will be preserved and they can be reactivated later.`;\n          openModal('modal-deactivate');\n\n        } else if (action === 'reactivate') {\n          reactivateUser(recid, btn.id);\n        }\n      });\n\n\n      // ─────────────────────────────────────────────────────────────\n      // INIT\n      // ─────────────────────────────────────────────────────────────\n     \n      searchUsers();\n\n    });\n  </script>\n</body>\n</html>",
         "output": "str",
-        "x": 380,
-        "y": 320,
+        "x": 1310,
+        "y": 580,
         "wires": [
             [
-                "6eccec49c7c05736"
+                "b2901a479ca2b7cc"
             ]
         ]
     },
     {
-        "id": "6eccec49c7c05736",
+        "id": "017f41cf1c99bb89",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/manage-users",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 250,
+        "y": 580,
+        "wires": [
+            [
+                "6c4ef009062a383c"
+            ]
+        ]
+    },
+    {
+        "id": "b2901a479ca2b7cc",
         "type": "http response",
-        "z": "sos_flow_tab",
+        "z": "3ad714a311044bff",
         "name": "",
         "statusCode": "",
         "headers": {},
-        "x": 550,
-        "y": 320,
-        "wires": []
-    },
-    {
-        "id": "0695090ba8cc4913",
-        "type": "subflow:5033a981a66d511a",
-        "z": "sos_flow_tab",
-        "name": "",
-        "x": 420,
-        "y": 100,
-        "wires": [
-            [
-                "1cdfb4e7545d4ddf"
-            ]
-        ]
-    },
-    {
-        "id": "1cdfb4e7545d4ddf",
-        "type": "subflow:d15be7953debce86",
-        "z": "sos_flow_tab",
-        "name": "",
-        "x": 720,
-        "y": 100,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "51d0ced847e7e9af",
-        "type": "subflow:5033a981a66d511a",
-        "z": "sos_flow_tab",
-        "name": "",
-        "x": 360,
-        "y": 200,
-        "wires": [
-            [
-                "e9aa0d68a4939512"
-            ]
-        ]
-    },
-    {
-        "id": "e9aa0d68a4939512",
-        "type": "subflow:d15be7953debce86",
-        "z": "sos_flow_tab",
-        "name": "",
-        "x": 600,
-        "y": 200,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "b2ac166e38a58aba",
-        "type": "subflow:cb85b1c398c1c3ab",
-        "z": "sos_flow_tab",
-        "name": "",
-        "x": 1250,
-        "y": 100,
-        "wires": [
-            [
-                "2551110611994fb5",
-                "48a07f3c15f9fa89"
-            ]
-        ]
-    },
-    {
-        "id": "1c5537e223f12e02",
-        "type": "subflow:cb85b1c398c1c3ab",
-        "z": "sos_flow_tab",
-        "name": "",
-        "x": 1870,
-        "y": 180,
-        "wires": [
-            [
-                "sos_func_success2",
-                "cba5bc7a8dfee5de"
-            ]
-        ]
-    },
-    {
-        "id": "518846afce48041b",
-        "type": "subflow:5c7279e5fed154c8",
-        "z": "sos_flow_tab",
-        "name": "VALIDATOR (SOS Alert)",
-        "x": 1350,
-        "y": 200,
-        "wires": [
-            [
-                "sos_func_validate2",
-                "1e2b01ee45e8f773"
-            ]
-        ]
-    },
-    {
-        "id": "a6f09735f103abfa",
-        "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 592",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1830,
-        "y": 280,
-        "wires": []
-    },
-    {
-        "id": "2551110611994fb5",
-        "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 593",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "payload",
-        "targetType": "msg",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1420,
-        "y": 140,
-        "wires": []
-    },
-    {
-        "id": "e6cd7ee663a9364a",
-        "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Prepare SOS Query",
-        "func": "const category = String(msg.req?.query?.category || '').trim();\n\nmsg.sosCategory = category;\n\nif (!category) {\n\n    msg.topic = `\n        SELECT DISTINCT category\n        FROM sosalerts\n        WHERE category IS NOT NULL\n          AND TRIM(category) <> ''\n          AND active = 'y'\n        ORDER BY category ASC;\n    `;\n\n    msg.payload = [];\n\n} else {\n\n    msg.topic = `\n        SELECT\n            recid,\n            category,\n            alert\n        FROM sosalerts\n        WHERE category = ?\n          AND alert IS NOT NULL\n          AND TRIM(alert) <> ''\n          AND active = 'y'\n        ORDER BY alert ASC;\n    `;\n\n    msg.payload = [category];\n}\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1000,
-        "y": 100,
-        "wires": [
-            [
-                "b2ac166e38a58aba"
-            ]
-        ]
-    },
-    {
-        "id": "48a07f3c15f9fa89",
-        "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Format Alerts Response",
-        "func": "msg.statusCode = 200;\n\nconst rows = Array.isArray(msg.payload) ? msg.payload : [];\n\nif (!msg.sosCategory) {\n\n    msg.payload = {\n        success: true,\n        categories: rows\n    };\n\n} else {\n\n    msg.payload = {\n        success: true,\n        category: msg.sosCategory,\n        alerts: rows\n    };\n\n}\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
         "x": 1510,
-        "y": 100,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "73787076fb0835ca",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/reset-credentials",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 280,
+        "y": 980,
         "wires": [
             [
-                "sos_http_resp1"
+                "9c228b755db973e9"
             ]
         ]
     },
     {
-        "id": "f4f9c1369f1b1a8e",
+        "id": "e10890fc44668ba8",
         "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Set Schema - SOS Alert",
-        "func": "msg.schema = {\n   \n    \n    category: {\n        type: 'string',\n        required: true,\n        minLen: 1,\n        maxLen: 100,\n        messages: {\n            required: 'Category is required.',\n            minLen: 'Category must not be empty',\n            maxLen: 'Category must not exceed 100 characters'\n        }\n    },\n\n    alert: {\n        type: 'string',\n        required: true,\n        minLen: 2,\n        maxLen: 255,\n        messages: {\n            required: 'Alert reason is required.',\n            minLen: 'Alert reason must be at least 2 characters',\n            maxLen: 'Alert reason must not exceed 255 characters'\n        }\n    },\n\n    // JSON/object field.\n    // The current VALIDATOR does not have an \"object\" type,\n    // so leave type undefined and let it pass through.\n    other_attributes: {\n        required: false\n    }\n};\n\nmsg.errorRedirectPath =\n    'https://ux.integro.coppercloud.in/app/sos-alerts';\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1070,
-        "y": 200,
-        "wires": [
-            [
-                "518846afce48041b"
-            ]
-        ]
-    },
-    {
-        "id": "sos_func_validate2",
-        "type": "function",
-        "z": "sos_flow_tab",
-        "name": "Validate & Prepare Insert",
-        "func": "const body = msg.payload || {};\n\nconst category = body.category;\nconst alert = body.alert;\nconst otherAttributes = body.other_attributes ?? {};\n\nmsg.notifyData = {\n    category: category,\n    alert: alert,\n    other_attributes: otherAttributes\n};\n\nmsg.topic = `\n    INSERT INTO sosalert_history\n    (\n        alert_text,\n        other_attributes,\n        channel,\n        sent_on\n    )\n    VALUES (?, ?, ?, NOW());\n`;\n\nmsg.payload = [\n    alert,\n    JSON.stringify(otherAttributes),\n    'PWA'\n];\n\nreturn [msg, null];",
+        "z": "3ad714a311044bff",
+        "name": "Validate Reset",
+        "func": "const { recid } = msg.req.body;\n\nif (!recid) {\n    msg.payload = { success: false, message: 'recid is required.' };\n    msg.statusCode = 400;\n    return [null, msg];\n}\n\nmsg.resetRecid = recid;\nmsg.resetDetails = {\n    password: 'User@123',\n    pin:      '1234'\n};\n\nreturn [msg, null];",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1650,
-        "y": 200,
+        "x": 1180,
+        "y": 980,
         "wires": [
             [
-                "1c5537e223f12e02"
+                "f8d9f90581a8d2e2"
             ],
             [
-                "sos_http_resp2",
-                "a6f09735f103abfa"
+                "f84b7aef6390380c"
             ]
         ]
     },
     {
-        "id": "c937f784686fac03",
-        "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 594",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 960,
-        "y": 260,
+        "id": "f84b7aef6390380c",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1370,
+        "y": 1020,
         "wires": []
     },
     {
-        "id": "ba2c0f4b0e2e7a71",
-        "type": "json",
-        "z": "sos_flow_tab",
-        "name": "Parse Request Body",
-        "property": "payload",
-        "action": "obj",
-        "pretty": false,
-        "x": 820,
-        "y": 200,
+        "id": "f8d9f90581a8d2e2",
+        "type": "bcrypt",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "action": "encrypt",
+        "field": "resetDetails.password",
+        "hash": "payload",
+        "target": "resetDetails.password",
+        "assignment": "replace",
+        "match": "match",
+        "outputs": 1,
+        "rounds": "5",
+        "x": 1450,
+        "y": 980,
         "wires": [
             [
-                "f4f9c1369f1b1a8e",
-                "c937f784686fac03"
+                "b7736a467928c505"
             ]
         ]
     },
     {
-        "id": "d3b67cf24c42dbec",
-        "type": "subflow:cc7f1a2b3c4d5e60",
-        "z": "sos_flow_tab",
+        "id": "b7736a467928c505",
+        "type": "bcrypt",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "action": "encrypt",
+        "field": "resetDetails.pin",
+        "hash": "payload",
+        "target": "resetDetails.pin",
+        "assignment": "replace",
+        "match": "match",
+        "outputs": 1,
+        "rounds": "5",
+        "x": 1590,
+        "y": 980,
+        "wires": [
+            [
+                "d269b511c021e365"
+            ]
+        ]
+    },
+    {
+        "id": "d269b511c021e365",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "SQL: reset credentials",
+        "func": "msg.topic = `\n    UPDATE users\n    SET\n        password      = ?,\n        pin           = ?,\n        lastlogin     = NULL,\n        tslastupdated = NOW(),\n        restpasswordtime = NOW()\n    WHERE recid = ?\n`;\n\nmsg.payload = [\n    msg.resetDetails.password,\n    msg.resetDetails.pin,\n    msg.resetRecid\n];\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1780,
+        "y": 980,
+        "wires": [
+            [
+                "b58bce9f449a848e"
+            ]
+        ]
+    },
+    {
+        "id": "fde19a05ba72fdf5",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Build Reset Success",
+        "func": "msg.payload = { success: true, message: 'Credentials reset successfully.' };\nmsg.statusCode = 200;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2220,
+        "y": 980,
+        "wires": [
+            [
+                "5e7f2a8dba4d2633"
+            ]
+        ]
+    },
+    {
+        "id": "5e7f2a8dba4d2633",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 2410,
+        "y": 980,
+        "wires": []
+    },
+    {
+        "id": "863914e0282e2fc9",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/manage-user",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 250,
+        "y": 800,
+        "wires": [
+            [
+                "2cb4c15212435b05"
+            ]
+        ]
+    },
+    {
+        "id": "d3b5e8bd8b831a42",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Validate & Prepare - Manage User",
+        "func": "const { recid, action, displayname, email, roles } = msg.payload;\n\nif (!recid || !action) {\n    msg.payload = { success: false, message: 'recid and action are required.' };\n    msg.statusCode = 400;\n    msg.skip = true;\n    return msg;\n}\n\nif (action === 'update') {\n    if (!displayname || !roles || !roles.length) {\n        msg.payload = { success: false, message: 'Missing required fields.' };\n        msg.statusCode = 400;\n        msg.skip = true;\n        return msg;\n    }\n    msg.topic = 'UPDATE users SET userdisplayname=?, email=?, userrole=?, tslastupdated=NOW() WHERE recid=?';\n    msg.payload = [displayname.toUpperCase(), email || '', JSON.stringify(roles), recid];\n    msg.successMessage = 'User updated successfully.';\n\n} else if (action === 'deactivate') {\n    msg.topic = \"UPDATE users SET active='n', tslastupdated=NOW() WHERE recid=?\";\n    msg.payload = [recid];\n    msg.successMessage = 'User deactivated successfully.';\n\n} else if (action === 'reactivate') {\n    msg.topic = \"UPDATE users SET active='y', tslastupdated=NOW() WHERE recid=?\";\n    msg.payload = [recid];\n    msg.successMessage = 'User reactivated successfully.';\n\n} else {\n    msg.payload = { success: false, message: 'Unknown action.' };\n    msg.statusCode = 400;\n    msg.skip = true;\n    return msg;\n}\n\nmsg.skip = false;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1320,
+        "y": 800,
+        "wires": [
+            [
+                "ab18c60b7267deec"
+            ]
+        ]
+    },
+    {
+        "id": "ab18c60b7267deec",
+        "type": "switch",
+        "z": "3ad714a311044bff",
+        "name": "skip?",
+        "property": "skip",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "true"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 1550,
+        "y": 800,
+        "wires": [
+            [
+                "aefb4c44d64d8831"
+            ],
+            [
+                "76e19a6381ea70f4"
+            ]
+        ]
+    },
+    {
+        "id": "aefb4c44d64d8831",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1730,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "8939c4d68b2ba6c6",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Build Success Response",
+        "func": "msg.payload = { success: true, message: msg.successMessage };\nmsg.statusCode = 200;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1970,
+        "y": 840,
+        "wires": [
+            [
+                "3828b7950ce604e6"
+            ]
+        ]
+    },
+    {
+        "id": "3828b7950ce604e6",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 2170,
+        "y": 840,
+        "wires": []
+    },
+    {
+        "id": "6c4ef009062a383c",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 520,
+        "y": 580,
+        "wires": [
+            [
+                "030c294873ce9f96"
+            ]
+        ]
+    },
+    {
+        "id": "030c294873ce9f96",
+        "type": "subflow:d15be7953debce86",
+        "z": "3ad714a311044bff",
         "name": "",
         "env": [
             {
-                "name": "recipientValue",
-                "value": "coord-sos",
-                "type": "str"
-            },
-            {
-                "name": "dataRoot",
-                "value": "notifyData",
-                "type": "str"
-            },
-            {
-                "name": "titleTemplate",
-                "value": "SOS Alert",
-                "type": "str"
-            },
-            {
-                "name": "bodyTemplate",
-                "value": "{{alert}} ({{category}})",
+                "name": "ALLOWED_ROLES",
+                "value": "admin,operator,manager",
                 "type": "str"
             }
         ],
-        "x": 2380,
+        "x": 800,
+        "y": 580,
+        "wires": [
+            [
+                "9304b2f8cfbc6b32"
+            ]
+        ]
+    },
+    {
+        "id": "9304b2f8cfbc6b32",
+        "type": "subflow:c653681de39a873e",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 1060,
+        "y": 580,
+        "wires": [
+            [
+                "eaea797b47293585"
+            ]
+        ]
+    },
+    {
+        "id": "bd88a0c9710c0fa7",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 480,
+        "y": 700,
+        "wires": [
+            [
+                "e26de17dcfb57180"
+            ]
+        ]
+    },
+    {
+        "id": "2cb4c15212435b05",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 480,
+        "y": 800,
+        "wires": [
+            [
+                "8e9b97df64979c38"
+            ]
+        ]
+    },
+    {
+        "id": "9c228b755db973e9",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 560,
+        "y": 980,
+        "wires": [
+            [
+                "f1823a3ca486c7fa"
+            ]
+        ]
+    },
+    {
+        "id": "6807b24d8c24983a",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 460,
         "y": 120,
+        "wires": [
+            [
+                "18e7a81a58f057ce"
+            ]
+        ]
+    },
+    {
+        "id": "18e7a81a58f057ce",
+        "type": "subflow:d15be7953debce86",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "env": [
+            {
+                "name": "ALLOWED_ROLES",
+                "value": "admin",
+                "type": "str"
+            }
+        ],
+        "x": 760,
+        "y": 120,
+        "wires": [
+            [
+                "238039dfbd75fff3"
+            ]
+        ]
+    },
+    {
+        "id": "238039dfbd75fff3",
+        "type": "subflow:c653681de39a873e",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 1040,
+        "y": 120,
+        "wires": [
+            [
+                "71341d31187774b1"
+            ]
+        ]
+    },
+    {
+        "id": "e1e23e022ce3be5e",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Validate & Prepare Rows",
+        "func": "let rows = msg.payload.rows;\n\nif (!Array.isArray(rows) || rows.length === 0) {\n    msg.statusCode = 400;\n    msg.payload = { success: false, message: 'No rows received' };\n    return [null, msg];\n}\n\nlet preparedRows = [];\nlet seenInBatch = {};\n\nfor (let i = 0; i < rows.length; i++) {\n    let row = rows[i];\n    if (!row.username || !row.displayname || !Array.isArray(row.roles) || row.roles.length === 0) {\n        msg.statusCode = 400;\n        msg.payload = { success: false, message: `Row ${i + 1}: Username, Display Name and Roles are required` };\n        return [null, msg];\n    }\n\n    let key = row.username.trim().toLowerCase();\n    let isDuplicateInBatch = seenInBatch.hasOwnProperty(key);\n    seenInBatch[key] = true;\n\n    preparedRows.push({\n        userid: row.userid || null,\n        username: row.username.trim(),\n        userdisplayname: row.displayname.trim().toUpperCase(),\n        userrole: JSON.stringify(row.roles),\n        email: row.email || null,\n        batchDuplicate: isDuplicateInBatch\n    });\n}\n\nmsg.queue = preparedRows;\nmsg.currentIndex = 0;\nmsg.results = [];\n\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1190,
+        "y": 340,
+        "wires": [
+            [
+                "aa9901fd41e0e054"
+            ],
+            [
+                "a45a417bdb943679"
+            ]
+        ]
+    },
+    {
+        "id": "aa9901fd41e0e054",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Loop — Pick Next Row",
+        "func": "// If all rows processed, go to final response\nif (msg.currentIndex >= msg.queue.length) {\n    return [msg, null];\n}\n\nlet row = msg.queue[msg.currentIndex];\nmsg.currentRow = row;\n\n// Skip DB check entirely if flagged as intra-batch duplicate\nif (row.batchDuplicate) {\n    msg.results.push({\n        username: row.username,\n        displayname: row.userdisplayname,\n        status: 'skipped',\n        message: 'Skipped - duplicate within submitted batch'\n    });\n    msg.currentIndex++;\n    return [null, msg]; // loop back\n}\n\n// Proceed to DB duplicate check\nmsg.payload = [row.username];\nreturn [null, msg];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1550,
+        "y": 340,
+        "wires": [
+            [
+                "8e9c1ab00b05b280"
+            ],
+            [
+                "e47955aa3389d7f1"
+            ]
+        ]
+    },
+    {
+        "id": "6e0e0f3a975802f0",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Handle Duplicate Result",
+        "func": "let exists = msg.payload.length > 0;\nlet row = msg.currentRow;\n\nif (exists) {\n    msg.results.push({\n        username: row.username,\n        displayname: row.userdisplayname,\n        status: 'skipped',\n        message: 'Skipped — username already exists in database'\n    });\n    msg.currentIndex++;\n    return [msg, null]; // skip insert, loop back\n}\n\nmsg.userdetails = {\n    userid: row.userid,\n    username: row.username,\n    userdisplayname: row.userdisplayname,\n    userrole: row.userrole,\n    email: row.email,\n    password: 'User@123',\n    pin: '1234'\n};\n\nreturn [null, msg]; // proceed to insert",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2230,
+        "y": 340,
+        "wires": [
+            [
+                "50adb2aa56c69033"
+            ],
+            [
+                "91925b5776a5f8d3"
+            ]
+        ]
+    },
+    {
+        "id": "44e4bc1e024a0527",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Record Insert Result & Advance",
+        "func": "let row = msg.currentRow;\n\nmsg.results.push({\n    username: row.username,\n    displayname: row.userdisplayname,\n    status: 'created',\n    message: 'Created successfully'\n});\n\nmsg.currentIndex++;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 3490,
+        "y": 340,
+        "wires": [
+            [
+                "50adb2aa56c69033"
+            ]
+        ]
+    },
+    {
+        "id": "8e9c1ab00b05b280",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Build Final Response",
+        "func": "let results = msg.results;\nlet created  = results.filter(r => r.status === 'created').length;\nlet skipped  = results.filter(r => r.status === 'skipped').length;\n\nmsg.payload = {\n    success: true,\n    summary: {\n        total:   results.length,\n        created: created,\n        skipped: skipped\n    },\n    results: results\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1820,
+        "y": 280,
+        "wires": [
+            [
+                "abec0345a7b42db3"
+            ]
+        ]
+    },
+    {
+        "id": "abec0345a7b42db3",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "200",
+        "headers": {},
+        "x": 2040,
+        "y": 280,
         "wires": []
     },
     {
-        "id": "cba5bc7a8dfee5de",
+        "id": "a45a417bdb943679",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1370,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "e47955aa3389d7f1",
+        "type": "template",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "SELECT username FROM users WHERE username = ?;",
+        "output": "str",
+        "x": 1820,
+        "y": 340,
+        "wires": [
+            [
+                "a90189857b22d081"
+            ]
+        ]
+    },
+    {
+        "id": "b07bd68176b95f76",
+        "type": "template",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "field": "topic",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "INSERT INTO users\n(userid, username, userdisplayname, userrole, email, password, pin, active)\nVALUES (?, ?, ?, ?, ?, ?, ?, 'y');",
+        "output": "str",
+        "x": 2900,
+        "y": 340,
+        "wires": [
+            [
+                "bc0528c539b186f7"
+            ]
+        ]
+    },
+    {
+        "id": "91925b5776a5f8d3",
+        "type": "bcrypt",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "action": "encrypt",
+        "field": "userdetails.password",
+        "hash": "payload",
+        "target": "payload",
+        "assignment": "replace",
+        "match": "match",
+        "outputs": 1,
+        "rounds": "5",
+        "x": 2450,
+        "y": 340,
+        "wires": [
+            [
+                "49e3055dff4a1583"
+            ]
+        ]
+    },
+    {
+        "id": "49e3055dff4a1583",
+        "type": "bcrypt",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "action": "encrypt",
+        "field": "userdetails.pin",
+        "hash": "payload",
+        "target": "payload",
+        "assignment": "replace",
+        "match": "match",
+        "outputs": 1,
+        "rounds": "5",
+        "x": 2570,
+        "y": 340,
+        "wires": [
+            [
+                "7a1bfb3fea5e3149"
+            ]
+        ]
+    },
+    {
+        "id": "7a1bfb3fea5e3149",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "function 15",
+        "func": "msg.payload = [\n    msg.userdetails.userid,\n    msg.userdetails.username,\n    msg.userdetails.userdisplayname,\n    msg.userdetails.userrole,\n    msg.userdetails.email,\n    msg.userdetails.password,\n    msg.userdetails.pin\n];\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2730,
+        "y": 340,
+        "wires": [
+            [
+                "b07bd68176b95f76"
+            ]
+        ]
+    },
+    {
+        "id": "d3980e06d4e79bcd",
+        "type": "subflow:5c7279e5fed154c8",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 930,
+        "y": 340,
+        "wires": [
+            [
+                "e1e23e022ce3be5e"
+            ]
+        ]
+    },
+    {
+        "id": "cfb50b232009c79c",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "msg.schema",
+        "func": "msg.errorRedirectPath = '/app/add-users';\n\nmsg.schema = {\n\n    rows: {\n        type: 'array',\n        required: true,\n        minItems: 1,\n        messages: {\n            required: 'At least one user is required.',\n            minItems: 'At least one user is required.'\n        },\n\n        itemSchema: {\n\n            userid: {\n                type: 'string',\n                required: false,\n                maxLen: 10,\n                pattern: '^\\\\d+$',\n                messages: {\n                    required: 'User ID is required.',\n                    pattern: 'User ID must contain numbers only.',\n                    maxLen: 'User ID must not exceed 20 characters.'\n                }\n            },\n\n            username: {\n                type: 'string',\n                required: true,\n                minLen: 3,\n                maxLen: 50,\n                pattern: '^[a-zA-Z0-9._]+$',\n                messages: {\n                    required: 'Username is required.',\n                    minLen: 'Username must be at least 3 characters.',\n                    maxLen: 'Username must not exceed 50 characters.',\n                    pattern: 'Username can contain only letters, numbers, dots (.) and underscores (_).'\n                }\n            },\n\n            displayname: {\n                type: 'string',\n                required: true,\n                minLen: 2,\n                maxLen: 100,\n                messages: {\n                    required: 'Display Name is required.',\n                    minLen: 'Display Name must be at least 2 characters.',\n                    maxLen: 'Display Name must not exceed 100 characters.'\n                }\n            },\n\n            roles: {\n                type: 'array',\n                required: true,\n                minItems: 1,\n                messages: {\n                    required: 'At least one role must be selected.',\n                    minItems: 'At least one role must be selected.'\n                }\n            },\n\n            email: {\n                type: 'string',\n                required: false,\n                maxLen: 255,\n                pattern: '^[^@\\\\s]+@[^@\\\\s]+\\\\.[^@\\\\s]+$',\n                messages: {\n                    pattern: 'Enter a valid email address.',\n                    maxLen: 'Email must not exceed 255 characters.'\n                }\n            }\n\n        }\n    }\n\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 730,
+        "y": 340,
+        "wires": [
+            [
+                "d3980e06d4e79bcd"
+            ]
+        ]
+    },
+    {
+        "id": "a90189857b22d081",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 1990,
+        "y": 340,
+        "wires": [
+            [
+                "6e0e0f3a975802f0"
+            ]
+        ]
+    },
+    {
+        "id": "bc0528c539b186f7",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 3110,
+        "y": 340,
+        "wires": [
+            [
+                "44e4bc1e024a0527",
+                "8fd9287c7a1e9017"
+            ]
+        ]
+    },
+    {
+        "id": "7527c8288f033f61",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 480,
+        "y": 340,
+        "wires": [
+            [
+                "cfb50b232009c79c"
+            ]
+        ]
+    },
+    {
+        "id": "d922dd87c461e04b",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 930,
+        "y": 700,
+        "wires": [
+            [
+                "3e1fcc58bf78fb6e"
+            ]
+        ]
+    },
+    {
+        "id": "76e19a6381ea70f4",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 1730,
+        "y": 840,
+        "wires": [
+            [
+                "8939c4d68b2ba6c6"
+            ]
+        ]
+    },
+    {
+        "id": "b58bce9f449a848e",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 2010,
+        "y": 980,
+        "wires": [
+            [
+                "fde19a05ba72fdf5"
+            ]
+        ]
+    },
+    {
+        "id": "8fd9287c7a1e9017",
         "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 595",
+        "z": "3ad714a311044bff",
+        "name": "debug 591",
         "active": true,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
+        "complete": "false",
         "statusVal": "",
         "statusType": "auto",
-        "x": 2030,
-        "y": 100,
+        "x": 3870,
+        "y": 340,
         "wires": []
     },
     {
-        "id": "1e2b01ee45e8f773",
-        "type": "debug",
-        "z": "sos_flow_tab",
-        "name": "debug 596",
-        "active": true,
-        "tosidebar": true,
-        "console": false,
-        "tostatus": false,
-        "complete": "true",
-        "targetType": "full",
-        "statusVal": "",
-        "statusType": "auto",
-        "x": 1500,
-        "y": 300,
+        "id": "6627c912faf681df",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/submit-users",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 200,
+        "y": 340,
+        "wires": [
+            [
+                "7527c8288f033f61"
+            ]
+        ]
+    },
+    {
+        "id": "65a1d4e18937e22c",
+        "type": "subflow:5c7279e5fed154c8",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 990,
+        "y": 800,
+        "wires": [
+            [
+                "d3b5e8bd8b831a42"
+            ]
+        ]
+    },
+    {
+        "id": "e94402f75b67430a",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/add-users",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 210,
+        "y": 120,
+        "wires": [
+            [
+                "6807b24d8c24983a"
+            ]
+        ]
+    },
+    {
+        "id": "7d6e96edcd0a3f71",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/search-users",
+        "method": "get",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 260,
+        "y": 700,
+        "wires": [
+            [
+                "bd88a0c9710c0fa7"
+            ]
+        ]
+    },
+    {
+        "id": "2dd61bf78550e65e",
+        "type": "subflow:5c7279e5fed154c8",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 950,
+        "y": 980,
+        "wires": [
+            [
+                "e10890fc44668ba8"
+            ]
+        ]
+    },
+    {
+        "id": "5c9212df46f370f5",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1370,
+        "y": 700,
         "wires": []
+    },
+    {
+        "id": "cd09f2e7649fb190",
+        "type": "http in",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "url": "/get-roles-db",
+        "method": "post",
+        "upload": false,
+        "swaggerDoc": "",
+        "x": 220,
+        "y": 220,
+        "wires": [
+            [
+                "562af82c7b6deecb"
+            ]
+        ]
+    },
+    {
+        "id": "b301309be02a82f2",
+        "type": "http response",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "statusCode": "",
+        "headers": {},
+        "x": 1350,
+        "y": 220,
+        "wires": []
+    },
+    {
+        "id": "d9d05a2411594203",
+        "type": "subflow:cb85b1c398c1c3ab",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 950,
+        "y": 220,
+        "wires": [
+            [
+                "6be0f99183134e0b"
+            ]
+        ]
+    },
+    {
+        "id": "562af82c7b6deecb",
+        "type": "subflow:5033a981a66d511a",
+        "z": "3ad714a311044bff",
+        "name": "",
+        "x": 480,
+        "y": 220,
+        "wires": [
+            [
+                "5c5f61694294417e"
+            ]
+        ]
+    },
+    {
+        "id": "5c5f61694294417e",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "Build SQL",
+        "func": "msg.topic = `\nSELECT\n    recid AS role_id,\n    role,\n    role_label\nFROM roles\nWHERE active = 'y'\nORDER BY role;\n`;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 220,
+        "wires": [
+            [
+                "d9d05a2411594203"
+            ]
+        ]
+    },
+    {
+        "id": "6be0f99183134e0b",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "format response",
+        "func": "const rows = Array.isArray(msg.payload) ? msg.payload : [];\n\nmsg.statusCode = 200;\n\nmsg.payload = {\n    success: true,\n    message: \"Roles fetched successfully.\",\n    payload: rows\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1180,
+        "y": 220,
+        "wires": [
+            [
+                "b301309be02a82f2"
+            ]
+        ]
+    },
+    {
+        "id": "71341d31187774b1",
+        "type": "template",
+        "z": "3ad714a311044bff",
+        "name": "source code new",
+        "field": "payload",
+        "fieldType": "msg",
+        "format": "handlebars",
+        "syntax": "mustache",
+        "template": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n  <title>CopperCloud — Add Users</title>\n  <meta name=\"description\" content=\"Create and manage new user accounts with roles.\" />\n  <meta name=\"robots\" content=\"noindex, nofollow\" />\n  <link rel=\"icon\" type=\"image/svg+xml\" href=\"assets/favicon.svg\" />\n  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\" />\n  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin />\n  <link href=\"https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap\" rel=\"stylesheet\" />\n  <link href=\"https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css\" rel=\"stylesheet\" />\n  <link rel=\"stylesheet\" href=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/v2/core.css\" />\n  <link rel=\"stylesheet\" href=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/v2/brand.css\" />\n  <link rel=\"stylesheet\" href=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/css/v2/form.css\" />\n  <style>\n    /* ═══════════════════════════════════════════════════════════════════\n       PAGE-LEVEL LAYOUT CLASSES — tokens only, no hardcoded colors/\n       borders/shadows. This grid/table-row layout does not exist in the\n       component library and is a permitted page-level exception\n       (Section 4.4): new layout only, tokens only, no override of any\n       existing library class' internals.\n       ═══════════════════════════════════════════════════════════════════ */\n\n    .user-card {\n      background: var(--bg-surface);\n      border: var(--border-width-default) var(--border-style-default) var(--c-border);\n      border-radius: var(--radius-lg);\n      padding: var(--page-padding) 24px 16px;\n      width: 100%;\n      max-width: 1300px;\n    }\n\n    /* Default / tablet state (521px–1023px): 2 fields per row.\n       This is simply the base state of our own page-level class —\n       no breakpoint involved, so no contract concern. */\n    .user-row-grid {\n      display: grid;\n      grid-template-columns: repeat(2, minmax(0, 1fr));\n      gap: 14px;\n      align-items: start;\n    }\n\n    .user-row-grid > div {\n      min-width: 0;\n    }\n\n    .user-row + .user-row {\n      padding-top: 12px;\n      border-top: var(--border-width-default) var(--border-style-default) var(--c-border);\n    }\n\n    .user-row-actions {\n      display: flex;\n      align-items: center;\n      justify-content: flex-end;\n      gap: 10px;\n      margin-top: 10px;\n      margin-bottom: 16px;  \n    }\n\n    .user-table-footer {\n      display: flex;\n      justify-content: space-between;\n      align-items: center;\n      flex-wrap: wrap;\n      gap: 12px;\n      margin-top: 16px;\n      padding-top: 14px;\n      border-top: var(--border-width-default) var(--border-style-default) var(--c-border);\n    }\n\n    .user-table-footer-left {\n      display: flex;\n      gap: var(--btn-group-gap);\n    }\n\n    .user-table-footer-right {\n      display: flex;\n      gap: var(--btn-group-gap);\n      align-items: center;\n    }\n\n    .user-row-remove-cell {\n      display: flex;\n      align-items: center;\n      justify-content: flex-end;\n      padding: 8px;\n    }\n\n\n    /* Structural visibility utility — no color/spacing/border value, so it is not a\n       \"token\" concern; it replaces the non-permitted inline style=\"display:none\"\n       previously used on non-modal elements (Section 3.5/3.6 only exempt modals). */\n    .is-hidden {\n      display: none;\n    }\n\n    /* ═══════════════════════════════════════════════════════════════════\n       PHONE OVERRIDE — ≤520px\n       Reuses the design system's OWN documented breakpoint (Section 4.5:\n       \"Mobile (form): ≤520px — Two-column grids collapse to one column\").\n       Not a new breakpoint, so no override/approval was required for this\n       block — it is standard library-sanctioned behavior applied to our\n       page-level grid class.\n       ═══════════════════════════════════════════════════════════════════ */\n    @media (max-width: 520px) {\n      .user-row-grid {\n        grid-template-columns: 1fr;\n      }\n\n      .user-row-remove-cell {\n        justify-content: flex-end;\n        padding: 4px;\n      }\n\n      .user-table-footer {\n        flex-direction: column;\n        align-items: stretch;\n      }\n\n      .user-table-footer-left,\n      .user-table-footer-right {\n        justify-content: center;\n      }\n    }\n\n    /* ═══════════════════════════════════════════════════════════════════\n       CUSTOM — NOT PART OF THE DESIGN SYSTEM.\n       LAPTOP / DESKTOP OVERRIDE — min-width: 1024px\n\n       This is the flagged, user-approved deviation from:\n         • Section 4.5 \"Do not introduce new breakpoints at the page level\"\n         • Section 6.1 \".page-wrap: do not add padding, margins, or width\n           directly to this element\" (its width is normally token-driven\n           only, via --page-wrap-max-width)\n\n       Approved explicitly in-conversation for this page only, to let the\n       5-field user row lay out side-by-side (\"flex, side by side\") on\n       laptop/desktop screens instead of wrapping into a narrow column.\n\n       Every VALUE still comes from design-system tokens — only the\n       LAYOUT MECHANICS (flex vs. grid, column count, wrapper max-width)\n       are page-specific and custom. No color, spacing, radius, border, or\n       shadow literal is introduced here.\n\n       If this pattern is used on more pages, it should be formally\n       promoted into brand.css / core.css as a real supported breakpoint\n       per the Section 10.2 \"New Component Approval Checklist\", rather\n       than repeated as a page-level override each time.\n       ═══════════════════════════════════════════════════════════════════ */\n    @media (min-width: 1024px) {\n      /* Approved override: widen the page wrapper for this page only, so\n         the flex row below has room to breathe. Uses var() only, no\n         hardcoded pixel color/spacing/border value. */\n      .page-wrap {\n        max-width: 1300px;\n      }\n\n      .user-row-grid {\n        display: flex;\n        align-items: flex-start;\n        gap: 14px;\n      }\n\n      .user-row-grid > div {\n        flex: 1 1 0;\n        min-width: 0;\n      }\n\n      .user-row-remove-cell {\n        flex: 0 0 36px;\n        padding-top: 8px;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <div class=\"main-div\">\n\n    <!-- HEADER -->\n    <div class=\"header\">\n      <div class=\"sidebar glass\" id=\"sidebar\">\n        <div class=\"sidebar-util-section\">\n          <div class=\"menu-button menu-icon\" id=\"menu-toggle-button\">\n            <img src=\"https://d14v8zihtgkcf4.cloudfront.net/artline/menu-icon.svg\" alt=\"Menu\" id=\"menu-toggle-icon\" />\n          </div>\n          {{{navButtons}}}\n        </div>\n        <div class=\"sidebar-profile-section\">\n          <div class=\"profile-button profile-icon nav-profile\" data-tooltip=\"My Profile\">\n            <img src=\"assets/user-icon.svg\" alt=\"Profile\" />\n          </div>\n        </div>\n      </div>\n      <div class=\"branding\">\n        <img src=\"https://d14v8zihtgkcf4.cloudfront.net/artline/artlinelogo.png\" alt=\"CopperCloud Logo\" />\n      </div>\n    </div>\n    <!-- /HEADER -->\n\n    <!-- BODY -->\n    <div class=\"body\">\n      <div class=\"page-wrap\">\n\n        <!-- [1] Page Heading -->\n        <div>\n          <div class=\"page-title\">Create Users</div>\n          <div class=\"page-subtitle\">Add one or more users with assigned roles. All required fields must be\n            filled before submitting.</div>\n        </div>\n\n        <!-- [2] Users table section -->\n        <div class=\"form-section\">\n          <div class=\"section-heading\">User Details</div>\n\n          <div class=\"user-card\">\n            <!-- ── PERSISTENT HTML TEMPLATE ROW (hidden, cloned on Add Row) ──\n                 Every id/for uses the __RID__ token. JS swaps __RID__ for a\n                 real row number when this row is cloned, guaranteeing unique\n                 IDs per row. This single HTML row is the source of truth. -->\n            <div class=\"user-row is-hidden\" id=\"user-row-template\">\n              <div class=\"user-row-remove-cell\">\n                  <button class=\"btn-danger is-hidden\" type=\"button\" id=\"btn-remove-__RID__\"\n                    aria-label=\"Remove row\">✕</button>\n                </div>\n              <div class=\"user-row-grid\">\n                <div>\n                  <div class=\"field\" id=\"field-userid-__RID__\">\n                    <input class=\"inp\" type=\"text\" inputmode=\"numeric\" id=\"inp-userid-__RID__\" placeholder=\" \" />\n                    <label class=\"lbl\" for=\"inp-userid-__RID__\">User ID</label>\n                  </div>\n                </div>\n                <div>\n                  <div class=\"field\" id=\"field-username-__RID__\">\n                    <input class=\"inp\" type=\"text\" id=\"inp-username-__RID__\" placeholder=\" \" />\n                    <label class=\"lbl\" for=\"inp-username-__RID__\">Username</label>\n                  </div>\n                </div>\n                <div>\n                  <div class=\"field\" id=\"field-displayname-__RID__\">\n                    <input class=\"inp\" type=\"text\" id=\"inp-displayname-__RID__\" placeholder=\" \" />\n                    <label class=\"lbl\" for=\"inp-displayname-__RID__\">Display Name</label>\n                  </div>\n                </div>\n                <div>\n                  <div class=\"field\" id=\"field-roles-__RID__\">\n                    <select id=\"inp-roles-__RID__\" multiple style=\"width:100%\"></select>\n                  </div>\n                </div>\n                <div>\n                  <div class=\"field\" id=\"field-email-__RID__\">\n                    <input class=\"inp\" type=\"text\" id=\"inp-email-__RID__\" placeholder=\" \" />\n                    <label class=\"lbl\" for=\"inp-email-__RID__\">Email</label>\n                  </div>\n                </div>\n                <div class=\"user-row-remove-cell\">\n                  <button class=\"btn-danger is-hidden\" type=\"button\" id=\"btn-remove-__RID__\"\n                    aria-label=\"Remove row\">✕</button>\n                </div>\n              </div>\n              <div class=\"user-row-actions\" id=\"row-actions-__RID__\">\n                <button class=\"btn-secondary is-hidden\" type=\"button\" id=\"btn-row-submit-__RID__\">Submit This\n                  Row</button>\n              </div>\n            </div>\n            <!-- ── END TEMPLATE ROW ── -->\n\n            <!-- Live rows are appended here -->\n            <div class=\"rows-wrapper\" id=\"rows-wrapper\"></div>\n\n            <!-- Actions bar -->\n            <div class=\"user-table-footer\">\n              <div class=\"user-table-footer-left\">\n                <button class=\"btn-secondary\" type=\"button\" id=\"btn-add-row\">+ Add Row</button>\n                <button class=\"btn-tertiary\" type=\"button\" id=\"btn-clear-all\">Clear All</button>\n              </div>\n              <div class=\"user-table-footer-right\">\n                <button class=\"btn-primary is-hidden\" type=\"button\" id=\"btn-submit-all\">Submit All</button>\n                <button class=\"btn-primary\" type=\"button\" id=\"btn-submit-single\">Submit Row</button>\n              </div>\n            </div>\n          </div>\n        </div>\n\n      </div>\n    </div>\n    <!-- /BODY -->\n\n  </div>\n  <!-- /main-div -->\n\n  <!-- ═══ MODALS (outside .main-div) ═══ -->\n\n  <!-- Confirm Submit All Modal -->\n  <div class=\"modal modal-warning\" id=\"modal-confirm-all\" style=\"display:none\">\n    <div class=\"modal-header\">\n      <span class=\"modal-title\">Submit All Rows</span>\n      <button class=\"modal-close\">✕</button>\n    </div>\n    <div class=\"modal-body\">\n      <div class=\"msg-box msg-box-warning\">\n        <span class=\"msg-box-icon\">⚠</span>\n        <div class=\"msg-box-body\">\n          <div class=\"msg-box-title\">Confirm Bulk Submission</div>\n          <div class=\"msg-box-text\">All rows will be submitted at once. Please verify each row before\n            continuing.</div>\n        </div>\n      </div>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn-tertiary\" type=\"button\">Cancel</button>\n      <button class=\"btn-primary\" type=\"button\" id=\"btn-modal-confirm-all\">Yes, Submit All</button>\n    </div>\n  </div>\n\n  <!-- Clear Confirm Modal -->\n  <div class=\"modal modal-warning\" id=\"modal-clear-confirm\" style=\"display:none\">\n    <div class=\"modal-header\">\n      <span class=\"modal-title\">Clear All Rows</span>\n      <button class=\"modal-close\">✕</button>\n    </div>\n    <div class=\"modal-body\">\n      <div class=\"msg-box msg-box-warning\">\n        <span class=\"msg-box-icon\">⚠</span>\n        <div class=\"msg-box-body\">\n          <div class=\"msg-box-title\">Clear All Fields?</div>\n          <div class=\"msg-box-text\">This will reset all rows to their default state. Any unsaved data will be\n            lost.</div>\n        </div>\n      </div>\n    </div>\n    <div class=\"modal-footer\">\n      <button class=\"btn-tertiary\" type=\"button\">Cancel</button>\n      <button class=\"btn-danger\" type=\"button\" id=\"btn-modal-clear-confirm\">Yes, Clear</button>\n    </div>\n  </div>\n\n  <!-- ═══ GLOBAL OVERLAYS — never move, never remove ═══ -->\n  <div id=\"modal-backdrop\"></div>\n  <div class=\"toast-container top-right\" id=\"toast-container\"></div>\n  <div id=\"tooltip\"></div>\n\n  <!-- ═══ SCRIPTS — mandatory load order ═══ -->\n  <script src=\"https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js\"></script>\n  <script src=\"https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js\"></script>\n  <script src=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/utils.js\"></script>\n  <script src=\"https://d14v8zihtgkcf4.cloudfront.net/coppercloud/js/core.js\"></script>\n  <script>\n    /**\n     * js/pages/add-users.js\n     * CopperCloud — Add Users\n     * CopperCloud Design System — Page Script\n     *\n     * Section order (mandatory):\n     *   1. SELECT2 INIT\n     *   2. NAVIGATION LISTENERS\n     *   3. VALIDATION RULES\n     *   4. STATE\n     *   5. ROLE LOADER\n     *   6. ROW BUILDER\n     *   7. ROW MANAGEMENT\n     *   8. COLLECT HELPERS\n     *   9. SUBMIT HANDLERS\n     *   10. CLEAR HANDLER\n     *   11. ADDITIONAL HANDLERS\n     *   12. INITIALIZATION\n     */\n\n    document.addEventListener('DOMContentLoaded', () => {\n\n      // ─────────────────────────────────────────────────────────────\n      // 1. SELECT2 INIT\n      // ─────────────────────────────────────────────────────────────\n      // No static <select> exists at page-load time — every role picker\n      // belongs to a dynamically-added row, so initSelect2() is invoked\n      // per-row inside buildRow() (Section 6) at the moment each row is\n      // created. This is the same requirement (\"Always call initSelect2()\")\n      // applied to dynamically generated markup instead of static markup.\n\n\n         // ─────────────────────────────────────────────────────────────\n    // PAGE-SPECIFIC MODAL BEHAVIOR\n    // Prevent clicking outside the modal from closing it.\n    // X / Cancel buttons will continue to work normally.\n    // ─────────────────────────────────────────────────────────────\n    const modalBackdrop = document.getElementById('modal-backdrop');\n\n      if (modalBackdrop) {\n        modalBackdrop.addEventListener('click', (event) => {\n          if (event.target === modalBackdrop) {\n            event.stopPropagation();\n          }\n        }, true);\n      }\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 2. NAVIGATION LISTENERS\n      // ─────────────────────────────────────────────────────────────\n      {{{redirectListeners}}}\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 3. VALIDATION RULES\n      // ─────────────────────────────────────────────────────────────\n      // ROW_RULES defines the validation spec for each field in a row.\n      // validateRow(rid) maps these rules onto the per-row element IDs\n      // (e.g. 'inp-username-1') before delegating to validateField().\n      const ROW_RULES = {\n        userid: {\n          required: false,\n          pattern: /^\\d+$/,\n          patternMessage: 'User ID must contain numbers only.',\n          maxLength: 10,\n          maxLengthMessage: 'User ID must not exceed 20 characters.',\n        },\n        username: {\n          required: true,\n          requiredMessage: 'Username is required.',\n          minLength: 3,\n          minLengthMessage: 'Username must be at least 3 characters.',\n          maxLength: 50,\n          maxLengthMessage: 'Username must not exceed 50 characters.',\n        },\n        displayname: {\n          required: true,\n          requiredMessage: 'Display Name is required.',\n          maxLength: 100,\n          maxLengthMessage: 'Display Name must not exceed 100 characters.',\n        },\n        roles: {\n          required: true,\n          requiredMessage: 'At least one role must be selected.',\n        },\n        email: {\n          required: false,\n          type: 'email',\n          typeMessage: 'Enter a valid email address.',\n        },\n      };\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 4. STATE\n      // ─────────────────────────────────────────────────────────────\n      let rowCount = 0;\n\n      // Roles now come from the database via loadRoles() (Section 5).\n      // Each entry has the shape { recid, role } as returned by\n      // POST ./get-roles-db. recid is NOT used for the dropdown value —\n      // the backend (./submit-users) stores role NAMES in roles[], so the\n      // Select2 value must continue to be the role name (see Section 6).\n      let rolesData = [];\n\n      // Grab the persistent HTML template row ONCE, then detach it from\n      // the live DOM so it never participates in queries or submission.\n      const templateRow = document.getElementById('user-row-template');\n      templateRow.remove();\n      templateRow.removeAttribute('id');\n      templateRow.classList.remove('is-hidden');\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 5. ROLE LOADER\n      // ─────────────────────────────────────────────────────────────\n      // Fetches roles from the database and stores the raw payload\n      // (as returned by the API) into rolesData. Never blocks page\n      // render — called in the background from INITIALIZATION below.\n      async function loadRoles() {\n        try {\n          const result = await apiCall('./get-roles-db', { method: 'POST' });\n          rolesData = result.payload || [];\n        } catch (err) {\n          openToast('Could not load roles. Please refresh the page.', 'error', 7000);\n        }\n      }\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 6. ROW BUILDER\n      // ─────────────────────────────────────────────────────────────\n      function buildRow(rid) {\n        const row = templateRow.cloneNode(true);\n        row.classList.add('user-row');\n        row.id = `user-row-${rid}`;\n\n        // Swap the __RID__ token in every id and for attribute\n        row.querySelectorAll('[id]').forEach(el => {\n          el.id = el.id.replace(/__RID__/g, rid);\n        });\n        row.querySelectorAll('[for]').forEach(el => {\n          el.setAttribute('for', el.getAttribute('for').replace(/__RID__/g, rid));\n        });\n\n        document.getElementById('rows-wrapper').appendChild(row);\n        initRoleSelect(rid);\n        wireRowEvents(rid);\n      }\n\n      function initRoleSelect(rid) {\n        const selectId = `inp-roles-${rid}`;\n        const select = document.getElementById(selectId);\n        if (!select) return;\n\n        // Dropdown displays r.role and stores r.role as the value.\n        // recid is intentionally NOT used as the value — the backend\n        // (./submit-users) expects roles: [\"admin\", \"manager\"] (names),\n        // not numeric ids.\n        select.innerHTML = rolesData\n          .map(r => `<option value=\"${r.role}\">${r.role_label}</option>`)\n          .join('');\n\n        initSelect2(selectId, { placeholder: 'Select Role(s)', allowClear: true, closeOnSelect: false });\n      }\n\n      function wireRowEvents(rid) {\n        document.getElementById(`btn-remove-${rid}`).addEventListener('click', () => removeRow(rid));\n        document.getElementById(`btn-row-submit-${rid}`).addEventListener('click', () => submitRow(rid));\n      }\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 7. ROW MANAGEMENT\n      // ─────────────────────────────────────────────────────────────\n      function addRow() {\n        rowCount++;\n        buildRow(rowCount);\n        updateRowControls();\n      }\n\n      function removeRow(rid) {\n        const el = document.getElementById(`user-row-${rid}`);\n        if (el) el.remove();\n        updateRowControls();\n      }\n\n      function updateRowControls() {\n        const rows = document.querySelectorAll('#rows-wrapper .user-row');\n        const multi = rows.length > 1;\n\n        rows.forEach(row => {\n          const rid = row.id.replace('user-row-', '');\n          const removeBtn = document.getElementById(`btn-remove-${rid}`);\n          const rowSubmitBtn = document.getElementById(`btn-row-submit-${rid}`);\n          if (removeBtn) removeBtn.classList.toggle('is-hidden', !multi);\n          if (rowSubmitBtn) rowSubmitBtn.classList.toggle('is-hidden', !multi);\n        });\n\n        document.getElementById('btn-submit-all').classList.toggle('is-hidden', !multi);\n        document.getElementById('btn-submit-single').classList.toggle('is-hidden', multi);\n      }\n\n      function resetAll() {\n        document.getElementById('rows-wrapper').innerHTML = '';\n        rowCount = 0;\n        addRow();\n      }\n\n      // validateRow — applies ROW_RULES to the per-row element IDs via\n      // validateField(), including the Select2-backed roles field.\n      function validateRow(rid) {\n        let valid = true;\n\n        const fieldMap = {\n          userid: `inp-userid-${rid}`,\n          username: `inp-username-${rid}`,\n          displayname: `inp-displayname-${rid}`,\n          roles: `inp-roles-${rid}`,\n          email: `inp-email-${rid}`,\n        };\n\n        Object.entries(fieldMap).forEach(([key, inputId]) => {\n          if (!validateField(inputId, ROW_RULES[key])) {\n            valid = false;\n          }\n        });\n\n        return valid;\n      }\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 8. COLLECT HELPERS\n      // ─────────────────────────────────────────────────────────────\n      function collectRow(rid) {\n        return {\n          userid: getFieldValue(`inp-userid-${rid}`),\n          username: getFieldValue(`inp-username-${rid}`),\n          displayname: getFieldValue(`inp-displayname-${rid}`),\n          roles: $(`#inp-roles-${rid}`).val() || [],\n          email: getFieldValue(`inp-email-${rid}`),\n        };\n      }\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 9. SUBMIT HANDLERS\n      // ─────────────────────────────────────────────────────────────\n\n      // Single-row submit (used by both \"Submit Row\" footer btn and\n      // per-row \"Submit This Row\" btn in multi-row mode)\n      async function submitRow(rid) {\n        // Step 1: Validate\n        const allValid = validateRow(rid);\n        if (!allValid) {\n          openToast('Please fix the highlighted errors before submitting.', 'error');\n          document.querySelector('.field--invalid')\n            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });\n          return;\n        }\n\n        // Step 2: Collect\n        const payload = collectRow(rid);\n\n        // Step 3: Load → API → Respond\n        setLoading(`btn-row-submit-${rid}`, true, 'Submitting…');\n        try {\n          const result = await apiCall('./submit-users', {\n            method: 'POST',\n            body: { rows: [payload] },\n          });\n          const rowResult = result.results?.[0];\n          const msg = rowResult?.message || result.message || 'User created.';\n          const toastType = rowResult?.status === 'skipped' ? 'warning' : 'success';\n          openToast(\n            `${payload.displayname || payload.username}: ${msg}`,\n            toastType,\n            5000\n          );\n          const rows = document.querySelectorAll('#rows-wrapper .user-row');\n          if (rows.length === 1) resetAll(); else removeRow(rid);\n        } catch (err) {\n          openToast(`Submission failed: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading(`btn-row-submit-${rid}`, false);\n        }\n      }\n\n      // Footer \"Submit Row\" button (single-row mode only)\n      document.getElementById('btn-submit-single').addEventListener('click', () => {\n        const rows = document.querySelectorAll('#rows-wrapper .user-row');\n        if (rows.length !== 1) return;\n        const rid = rows[0].id.replace('user-row-', '');\n        submitRow(rid);\n      });\n\n      // Footer \"Submit All\" button — opens confirm modal\n      document.getElementById('btn-submit-all').addEventListener('click', () => {\n        openModal('modal-confirm-all');\n      });\n\n      // Confirm modal — bulk submit\n      document.getElementById('btn-modal-confirm-all').addEventListener('click', async () => {\n        closeModal('modal-confirm-all');\n\n        // Step 1: Validate all rows\n        const rows = document.querySelectorAll('#rows-wrapper .user-row');\n        let allValid = true;\n        rows.forEach(row => {\n          const rid = row.id.replace('user-row-', '');\n          if (!validateRow(rid)) allValid = false;\n        });\n\n        if (!allValid) {\n          openToast('Please fix the highlighted errors before submitting.', 'error');\n          document.querySelector('.field--invalid')\n            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });\n          return;\n        }\n\n        // Step 2: Collect all rows\n        const payload = Array.from(rows).map(row =>\n          collectRow(row.id.replace('user-row-', ''))\n        );\n\n        // Step 3: Load → API → Respond\n        setLoading('btn-submit-all', true, 'Submitting…');\n        try {\n          const result = await apiCall('./submit-users', {\n            method: 'POST',\n            body: { rows: payload },\n          });\n          const created = result.summary?.created || 0;\n          const skipped = result.summary?.skipped || 0;\n          const skippedNames = result.results\n            .filter(r => r.status === 'skipped')\n            .map(r => r.username)\n            .join(', ');\n\n          const toastType = skipped > 0 ? 'warning' : 'success';\n          const toastMsg = skipped > 0\n            ? `Created: ${created}, Skipped: ${skipped} — ${skippedNames}`\n            : `All ${created} user(s) created successfully.`;\n\n          openToast(toastMsg, toastType, 7000);\n          resetAll();\n        } catch (err) {\n          openToast(`Bulk submission failed: ${err.message}`, 'error', 7000);\n        } finally {\n          setLoading('btn-submit-all', false);\n        }\n      });\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 10. CLEAR HANDLER\n      // ─────────────────────────────────────────────────────────────\n      document.getElementById('btn-clear-all').addEventListener('click', () => {\n        openModal('modal-clear-confirm');\n      });\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 11. ADDITIONAL HANDLERS\n      // ─────────────────────────────────────────────────────────────\n\n      // Clear confirm modal — execute the actual reset\n      document.getElementById('btn-modal-clear-confirm').addEventListener('click', () => {\n        closeModal('modal-clear-confirm');\n        resetAll();\n        openToast('All rows cleared.', 'info', 3000);\n      });\n\n      // Add Row button\n      document.getElementById('btn-add-row').addEventListener('click', addRow);\n\n\n      // ─────────────────────────────────────────────────────────────\n      // 12. INITIALIZATION\n      // ─────────────────────────────────────────────────────────────\n      // Render the first row immediately — never block the UI on the network.\n      addRow();\n\n      // Roles load in the background. When they arrive, rebuild the\n      // Select2 dropdowns in any rows that were already rendered.\n      loadRoles().then(() => {\n          document.querySelectorAll('#rows-wrapper .user-row').forEach(row => {\n              const rid = row.id.replace('user-row-', '');\n              initRoleSelect(rid);\n          });\n      });\n\n    });\n  </script>\n\n</body>\n\n</html>",
+        "output": "str",
+        "x": 1330,
+        "y": 120,
+        "wires": [
+            [
+                "1ff7434ec6089e50"
+            ]
+        ]
+    },
+    {
+        "id": "f1823a3ca486c7fa",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "msg.schema",
+        "func": "msg.errorRedirectPath = '/app/manage-users';\n\nmsg.schema = {\n\n    recid: {\n        type: 'number',\n        required: true,\n        min: 1,\n        messages: {\n            required: 'User ID is required.',\n            type: 'User ID must be a number.',\n            min: 'Invalid User ID.'\n        }\n    }\n\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 980,
+        "wires": [
+            [
+                "2dd61bf78550e65e"
+            ]
+        ]
+    },
+    {
+        "id": "8e9b97df64979c38",
+        "type": "function",
+        "z": "3ad714a311044bff",
+        "name": "msg.schema",
+        "func": "msg.errorRedirectPath = '/app/manage-users';\n\nmsg.schema = {\n\n    recid: {\n        type: 'number',\n        required: true,\n        min: 1,\n        messages: {\n            required: 'User ID is required.',\n            type: 'User ID must be a number.',\n            min: 'Invalid User ID.'\n        }\n    },\n\n    action: {\n        type: 'string',\n        required: true,\n        allowedValues: [\n            'update',\n            'deactivate',\n            'reactivate'\n        ],\n        messages: {\n            required: 'Action is required.',\n            allowedValues: 'Invalid action.'\n        }\n    },\n\n    displayname: {\n        type: 'string',\n        required: false,\n        minLen: 2,\n        maxLen: 100,\n        messages: {\n            minLen: 'Display Name must be at least 2 characters.',\n            maxLen: 'Display Name must not exceed 100 characters.'\n        }\n    },\n\n    email: {\n        type: 'string',\n        required: false,\n        maxLen: 255,\n        pattern: '^[^@\\\\s]+@[^@\\\\s]+\\\\.[^@\\\\s]+$',\n        messages: {\n            pattern: 'Enter a valid email address.',\n            maxLen: 'Email must not exceed 255 characters.'\n        }\n    },\n\n    roles: {\n        type: 'array',\n        required: false,\n        minItems: 1,\n        messages: {\n            minItems: 'At least one role must be selected.'\n        }\n    }\n\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 750,
+        "y": 800,
+        "wires": [
+            [
+                "65a1d4e18937e22c"
+            ]
+        ]
     }
 ]
