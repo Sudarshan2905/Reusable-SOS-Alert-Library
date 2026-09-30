@@ -15,6 +15,16 @@
        SOS.init({ button: '#btnSOS' });
      </script>
 
+   Usage with dynamic other attributes:
+     SOS.init({
+       button: '#btnSOS',
+       otherAttributes: {
+         machine:   () => getMachine(),          // -> "Select Machine"
+         operation: async () => getOperation(),  // -> "Select Operation"
+         message:   'Production issue'           // data only, no dropdown
+       }
+     });
+
    Exposes exactly one global: window.SOS
    Everything else is private to this closure.
 
@@ -34,6 +44,7 @@ const SOS = (() => {
     button: null,          // CSS selector or Element
     apiBase: '/app',       // base path — GET {apiBase}/sos-alerts, POST {apiBase}/sos-alert
     context: {},
+    otherAttributes: {},   // DYNAMIC OTHER ATTRIBUTES — { key: array | fn | async fn | value }
     getAlertsUrl: null,    // full override for the GET url
     postAlertUrl: null,    // full override for the POST url
     cacheDuration: 300000, // ms to reuse a cached GET /sos-alerts response (default 5 min; 0 disables caching)
@@ -50,6 +61,7 @@ const SOS = (() => {
     categoryGrid: null,     // NEW — replaces categorySelect
     alertSection: null,     // NEW — hideable <section> wrapping "SELECT ALERT"
     grid: null,             // UNCHANGED reference, now lives inside .sos-alert-section
+    dynamicContainer: null, // DYNAMIC OTHER ATTRIBUTES — host for generated selects
     sendBtn: null,
     closeBtn: null,
     otherWrapper: null,
@@ -76,6 +88,15 @@ const SOS = (() => {
   };
 
   let lastFocusedEl = null;
+
+  // DYNAMIC OTHER ATTRIBUTES — per-modal-opening state (wiped on every close/open)
+  const dyn = {
+    token: 0,        // bumped on every reset; async results from an older opening are ignored
+    fields: [],      // one controller per generated select
+    data: {},        // resolved data-only attributes (e.g. message)
+    openCtl: null,   // the select whose menu is currently open (max one)
+  };
+  // END DYNAMIC OTHER ATTRIBUTES
 
   // ==========================================================
   // PRIVATE HELPERS
@@ -147,10 +168,13 @@ const SOS = (() => {
     if (options.signal) fetchOptions.signal = options.signal;
 
     if (options.body !== undefined) {
-      fetchOptions.headers = { 'Content-Type': 'text/plain;charset=UTF-8' };
+      fetchOptions.headers = {
+          'Content-Type': 'application/json'
+      };
+
       fetchOptions.body = typeof options.body === 'object'
-        ? JSON.stringify(options.body)
-        : options.body;
+          ? JSON.stringify(options.body)
+          : options.body;
     }
 
     const res = await fetch(url, fetchOptions);
@@ -243,6 +267,10 @@ const createModal = () => {
             <div class="sos-other-counter" id="sos-other-counter" aria-live="polite">0 / 150</div>
           </div>
         </section>
+
+        <!-- DYNAMIC OTHER ATTRIBUTES — filled by renderDynamicAttributes() -->
+        <div class="sos-dynamic-attributes" hidden></div>
+        <!-- END DYNAMIC OTHER ATTRIBUTES -->
       </div>
       <div class="sos-footer">
         <button type="button" class="sos-send" disabled aria-disabled="true">
@@ -259,6 +287,7 @@ const createModal = () => {
   els.categoryGrid = overlay.querySelector('.sos-category-grid'); // NEW
   els.alertSection = overlay.querySelector('.sos-alert-section'); // NEW
   els.grid = overlay.querySelector('.sos-grid');                  // now inside .sos-alert-section
+  els.dynamicContainer = overlay.querySelector('.sos-dynamic-attributes'); // DYNAMIC OTHER ATTRIBUTES
   els.sendBtn = overlay.querySelector('.sos-send');
   els.closeBtn = overlay.querySelector('.sos-close');
   els.otherWrapper = overlay.querySelector('.sos-other-wrapper');
@@ -273,6 +302,13 @@ const createModal = () => {
   els.overlay.addEventListener('click', onOverlayClick);
   els.otherInput.addEventListener('input', onOtherInputChange);
   els.otherInput.addEventListener('keydown', onOtherInputKeydown);
+
+  // DYNAMIC OTHER ATTRIBUTES — 3 delegated listeners cover every generated select
+  els.dynamicContainer.addEventListener('click', onDynamicClick);
+  els.dynamicContainer.addEventListener('input', onDynamicInput);
+  els.dynamicContainer.addEventListener('keydown', onDynamicKeydown);
+  els.modal.addEventListener('click', onModalClickCloseMenu);
+  // END DYNAMIC OTHER ATTRIBUTES
 };
 
 
@@ -513,29 +549,7 @@ const fetchAlertsForCategory = async (category, force = false) => {
     }
   };
 
-  /**
-   * Guarantees a client-side "Other" option always exists, regardless
-   * of what the backend's alert list contains. The free-text flow
-   * shouldn't depend on someone remembering to seed an "Other" row in
-   * the sosalerts table — that would make the feature silently
-   * disappear for any customer/table that doesn't have it.
-   * No-ops if the API already returned its own "Other" entry (avoids
-   * a duplicate button).
-   */
-  const appendOtherButtonIfMissing = () => {
-    const already = Array.from(els.grid.querySelectorAll('.sos-alert'))
-      .some((b) => isOtherAlert(b.dataset.alert, b.dataset.custom === 'true'));
-    if (already) return;
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'sos-alert sos-alert--wide';
-    btn.dataset.alert = 'Other';
-    btn.textContent = 'Other';
-    btn.setAttribute('role', 'button');
-    btn.setAttribute('aria-pressed', 'false');
-    els.grid.appendChild(btn);
-  };
 
   const renderEmpty = () => {
     els.grid.innerHTML = `
@@ -543,7 +557,7 @@ const fetchAlertsForCategory = async (category, force = false) => {
         <span>No alert reasons are available right now.</span>
       </div>
     `;
-    appendOtherButtonIfMissing(); // still let the user report something via free text
+     
   };
 
   const renderAlerts = () => {
@@ -554,36 +568,461 @@ const fetchAlertsForCategory = async (category, force = false) => {
 
     els.grid.innerHTML = '';
 
+    const normalAlerts = [];
+    const otherAlerts = [];
+
     state.alerts.forEach((item) => {
       const label = (item && item.alert !== undefined && item.alert !== null)
         ? String(item.alert)
         : '';
+
       if (!label.trim()) return;
 
-      const isCustom = !!(item && item.custom === true); // explicit backend metadata
+      const isCustom = !!(item && item.custom === true);
 
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sos-alert';
       btn.dataset.alert = label;
       btn.dataset.recid = item.recid;
-      if (isCustom) btn.dataset.custom = 'true';
+
+      if (isCustom) {
+        btn.dataset.custom = 'true';
+      }
+
       btn.textContent = label;
       btn.setAttribute('role', 'button');
       btn.setAttribute('aria-pressed', 'false');
 
-      // Visual nicety only — a lone "Other"/custom-style reason spans
-      // the full row width, matching the reference UI. Purely cosmetic;
-      // does not affect selection/submit logic.
+      /*
+      * "Other" / custom alerts are always rendered last.
+      * They also occupy the full row.
+      */
       if (isCustom || label.trim().toLowerCase() === 'other') {
         btn.classList.add('sos-alert--wide');
+        otherAlerts.push(btn);
+      } else {
+        normalAlerts.push(btn);
       }
+    });
 
+    // First render all standard alerts
+    normalAlerts.forEach((btn) => {
       els.grid.appendChild(btn);
     });
 
-    appendOtherButtonIfMissing(); // guarantee "Other" is always present
+    // Always render Other/custom alerts at the end
+    otherAlerts.forEach((btn) => {
+      els.grid.appendChild(btn);
+    });
   };
+
+  // ==========================================================
+  // DYNAMIC OTHER ATTRIBUTES
+  // ----------------------------------------------------------
+  // SOS.init({ otherAttributes: { machine: fn|array, ..., message: 'text' } })
+  //   - key "message"  → data only, no UI, sent as-is
+  //   - any other key  → auto-labelled searchable select
+  // Everything is private to this closure; no extra globals.
+  // ==========================================================
+
+  const RESERVED_DATA_KEYS = ['message'];
+
+  /** True for keys that are sent as data and never get a dropdown. */
+  const isDataOnlyKey = (key) => RESERVED_DATA_KEYS.includes(String(key).toLowerCase());
+
+  /** Tiny DOM helper — textContent only, never innerHTML. */
+  const h = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  /**
+   * "machine" → "Select Machine", "machine_operator" → "Select Machine Operator",
+   * "machine-operation" → "Select Machine Operation", "productionLine" → "Select Production Line".
+   */
+  const formatAttributeLabel = (key) => {
+    const words = String(key)
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .replace(/[_\-\s]+/g, ' ')
+      .trim()
+      .replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+    return `Select ${words || 'Option'}`;
+  };
+
+  /**
+   * One resolver for every value type: function → call it (await if it
+   * returns a Promise), anything else → use as-is. A synchronous throw
+   * inside the function becomes a rejection because this is async.
+   */
+  const resolveAttributeValue = async (value) => (
+    typeof value === 'function' ? await value() : value
+  );
+
+  /**
+   * ["A","B"] or [{ value, label }] → [{ value, label, search }].
+   * Throws if the input is not an array so the field shows its error state.
+   */
+  const normalizeOptions = (raw) => {
+    if (!Array.isArray(raw)) throw new Error('Options must be an array.');
+
+    const out = [];
+    raw.forEach((item) => {
+      const isObj = item !== null && typeof item === 'object';
+      const value = isObj ? (item.value ?? item.label) : item;
+      const label = isObj ? (item.label ?? item.value) : item;
+      if (value === undefined || value === null || label === undefined || label === null) return;
+
+      const text = String(label);
+      if (!text.trim()) return;
+
+      out.push({ value, label: text, search: `${text} ${value}`.toLowerCase() });
+    });
+    return out;
+  };
+
+  /** Paints the trigger from ctl.status / ctl.selected. */
+  const renderTrigger = (ctl) => {
+    const { trigger, value } = ctl.els;
+    const { status, selected } = ctl;
+
+    trigger.classList.toggle('sos-select-loading', status === 'loading');
+    trigger.classList.toggle('sos-select-error', status === 'error');
+    trigger.classList.toggle('is-selected', status === 'ready' && !!selected);
+    trigger.disabled = status === 'loading' || status === 'empty';
+    trigger.setAttribute('aria-busy', String(status === 'loading'));
+
+    if (status === 'loading') value.textContent = 'Loading\u2026';
+    else if (status === 'error') value.textContent = 'Unable to load options. Tap to retry.';
+    else if (status === 'empty') value.textContent = 'No options available';
+    else value.textContent = selected ? selected.label : ctl.label;
+  };
+
+  /** Moves the keyboard highlight and keeps it visible inside the list. */
+  const updateActive = (ctl) => {
+    const { list, search } = ctl.els;
+
+    if (ctl.activeEl) ctl.activeEl.classList.remove('is-active');
+    const li = ctl.active >= 0 ? list.children[ctl.active] : null;
+    ctl.activeEl = li || null;
+
+    if (!li) {
+      search.removeAttribute('aria-activedescendant');
+      return;
+    }
+
+    li.classList.add('is-active');
+    search.setAttribute('aria-activedescendant', li.id);
+
+    // Scroll only the option list — never the modal body.
+    const top = li.offsetTop;
+    const bottom = top + li.offsetHeight;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+  };
+
+  /** Rebuilds the <li> list from ctl.filtered (one DocumentFragment, no per-option listeners). */
+  const renderOptions = (ctl) => {
+    const { list, empty } = ctl.els;
+    const fragment = document.createDocumentFragment();
+
+    ctl.filtered.forEach((opt, i) => {
+      const li = h('li', 'sos-select-option', opt.label);
+      li.id = `${ctl.uid}-o${i}`;
+      li.setAttribute('role', 'option');
+      li.dataset.index = String(i);
+      const isSel = opt === ctl.selected;
+      li.setAttribute('aria-selected', String(isSel));
+      if (isSel) li.classList.add('is-selected');
+      fragment.appendChild(li);
+    });
+
+    list.replaceChildren(fragment);
+    empty.hidden = ctl.filtered.length > 0;
+
+    ctl.activeEl = null;
+    ctl.active = ctl.filtered.length ? Math.max(0, ctl.filtered.indexOf(ctl.selected)) : -1;
+    updateActive(ctl);
+  };
+
+  const openMenu = (ctl) => {
+    if (ctl.open) return;
+    if (dyn.openCtl && dyn.openCtl !== ctl) closeMenu(dyn.openCtl);
+
+    const { trigger, menu, search } = ctl.els;
+    ctl.open = true;
+    dyn.openCtl = ctl;
+
+    menu.hidden = false;
+    trigger.classList.add('is-open');
+    trigger.setAttribute('aria-expanded', 'true');
+
+    search.value = '';
+    ctl.filtered = ctl.options;       // already in memory — the attribute function is NOT called again
+    renderOptions(ctl);
+
+    search.focus({ preventScroll: true });
+    menu.scrollIntoView({ block: 'nearest' });
+  };
+
+  const closeMenu = (ctl, returnFocus = false) => {
+    if (!ctl || !ctl.open) return;
+
+    const { trigger, menu, search } = ctl.els;
+    ctl.open = false;
+    if (dyn.openCtl === ctl) dyn.openCtl = null;
+
+    menu.hidden = true;
+    trigger.classList.remove('is-open');
+    trigger.setAttribute('aria-expanded', 'false');
+    search.value = '';
+
+    if (returnFocus) trigger.focus();
+  };
+
+  /** Select an option; choosing the already-selected one clears it (fields are optional). */
+  const toggleOption = (ctl, opt) => {
+    if (ctl.selected === opt) {
+      ctl.selected = null;
+      ctl.value = null;
+      log('cleared', ctl.key);
+    } else {
+      ctl.selected = opt;
+      ctl.value = opt.value;
+      log('selected', ctl.key + ':', opt.value);
+    }
+    renderTrigger(ctl);
+    closeMenu(ctl, true);
+  };
+
+  /** Resolves one attribute and fills its select. Stale results (older modal opening) are dropped. */
+  const loadField = async (ctl, token = dyn.token) => {
+    ctl.status = 'loading';
+    renderTrigger(ctl);
+    log('resolving dynamic attribute:', ctl.key);
+
+    try {
+      const raw = await resolveAttributeValue(config.otherAttributes[ctl.key]);
+      if (token !== dyn.token) return;
+
+      ctl.options = normalizeOptions(raw);
+      ctl.filtered = ctl.options;
+      ctl.status = ctl.options.length ? 'ready' : 'empty';
+      log('resolved options:', ctl.options.length);
+    } catch (err) {
+      if (token !== dyn.token) return;
+      ctl.options = [];
+      ctl.filtered = [];
+      ctl.status = 'error';
+      log('failed to resolve dynamic attribute:', ctl.key, err);
+    }
+
+    renderTrigger(ctl);
+  };
+
+  /** Builds one searchable select (label + trigger + menu) with DOM APIs only. */
+  const createSearchableSelect = (key, idx) => {
+    const uid = `sos-dyn-${idx}`;          // namespaced ids, needed only for aria-* wiring
+    const label = formatAttributeLabel(key);
+    const searchLabel = label.replace(/^Select /, 'Search ');
+
+    const root = h('div', 'sos-dynamic-field');
+    root.dataset.idx = String(idx);
+    root.dataset.attr = key;
+
+    const labelEl = h('span', 'sos-dynamic-label', label);
+    labelEl.id = `${uid}-label`;
+
+    const wrap = h('div', 'sos-select');
+
+    const trigger = h('button', 'sos-select-trigger');
+    trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', `${uid}-menu`);
+
+    const value = h('span', 'sos-select-value');
+    value.id = `${uid}-value`;
+    trigger.setAttribute('aria-labelledby', `${labelEl.id} ${value.id}`);
+
+    const arrow = h('span', 'sos-select-arrow', '\u25BE');
+    arrow.setAttribute('aria-hidden', 'true');
+    trigger.append(value, arrow);
+
+    const menu = h('div', 'sos-select-menu');
+    menu.id = `${uid}-menu`;
+    menu.hidden = true;
+
+    const search = h('input', 'sos-select-search');
+    search.type = 'text';
+    search.placeholder = `${searchLabel}\u2026`;
+    search.autocomplete = 'off';
+    search.spellcheck = false;
+    search.setAttribute('role', 'combobox');
+    search.setAttribute('aria-autocomplete', 'list');
+    search.setAttribute('aria-expanded', 'true');
+    search.setAttribute('aria-controls', `${uid}-list`);
+    search.setAttribute('aria-label', searchLabel);
+
+    const list = h('ul', 'sos-select-options');
+    list.id = `${uid}-list`;
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-labelledby', labelEl.id);
+
+    const empty = h('div', 'sos-select-empty', 'No results found');
+    empty.hidden = true;
+
+    menu.append(search, list, empty);
+    wrap.append(trigger, menu);
+    root.append(labelEl, wrap);
+
+    return {
+      key, label, uid, root,
+      options: [], filtered: [],
+      selected: null, value: null,
+      status: 'loading', open: false,
+      active: -1, activeEl: null,
+      els: { trigger, value, menu, search, list, empty },
+    };
+  };
+
+  /**
+   * (Re)builds every generated field for the current modal opening.
+   * Non-message keys → selects; message keys → resolved into dyn.data.
+   */
+  const renderDynamicAttributes = () => {
+    resetDynamicAttributes();
+
+    const box = els.dynamicContainer;
+    const attrs = config.otherAttributes;
+    if (!box || !attrs || typeof attrs !== 'object') return;
+
+    const token = dyn.token;
+    const fragment = document.createDocumentFragment();
+
+    Object.keys(attrs).forEach((key) => {
+      if (isDataOnlyKey(key)) {
+        resolveAttributeValue(attrs[key])
+          .then((v) => { if (token === dyn.token) dyn.data[key] = v; })
+          .catch((err) => log('failed to resolve data attribute:', key, err));
+        return;
+      }
+      const ctl = createSearchableSelect(key, dyn.fields.length);
+      dyn.fields.push(ctl);
+      fragment.appendChild(ctl.root);
+    });
+
+    if (!dyn.fields.length) return;   // e.g. only { message } → zero dropdowns
+
+    box.appendChild(fragment);
+    box.hidden = false;
+    dyn.fields.forEach((ctl) => loadField(ctl, token));
+  };
+
+  /**
+   * Builds the final other_attributes object, keys exactly as supplied to init().
+   * Unselected optional selects are OMITTED (not sent as null).
+   */
+  const collectDynamicAttributes = () => {
+    const out = {};
+    Object.keys(config.otherAttributes || {}).forEach((key) => {
+      if (isDataOnlyKey(key)) {
+        const v = dyn.data[key];
+        if (v !== undefined && v !== null) out[key] = v;
+        return;
+      }
+      const ctl = dyn.fields.find((f) => f.key === key);
+      if (ctl && ctl.value !== null && ctl.value !== undefined) out[key] = ctl.value;
+    });
+    return out;
+  };
+
+  /** Clears selections, search text, open state and generated DOM. */
+  const resetDynamicAttributes = () => {
+    dyn.token += 1;                    // invalidates any in-flight resolvers
+    dyn.fields = [];
+    dyn.data = {};
+    dyn.openCtl = null;
+    if (els.dynamicContainer) {
+      els.dynamicContainer.replaceChildren();
+      els.dynamicContainer.hidden = true;
+    }
+  };
+
+  // ── Delegated handlers (one set for all generated selects) ──
+  const getCtl = (target) => {
+    const field = target.closest('.sos-dynamic-field');
+    return field ? dyn.fields[Number(field.dataset.idx)] : null;
+  };
+
+  const onDynamicClick = (e) => {
+    if (state.isSending) return;
+    const ctl = getCtl(e.target);
+    if (!ctl) return;
+
+    const optEl = e.target.closest('.sos-select-option');
+    if (optEl) {
+      const opt = ctl.filtered[Number(optEl.dataset.index)];
+      if (opt) toggleOption(ctl, opt);
+      return;
+    }
+
+    if (e.target.closest('.sos-select-trigger')) {
+      if (ctl.status === 'error') { loadField(ctl); return; }   // tap to retry
+      if (ctl.status !== 'ready') return;
+      if (ctl.open) closeMenu(ctl); else openMenu(ctl);
+    }
+  };
+
+  /** Client-side filtering only — the attribute function is never called while typing. */
+  const onDynamicInput = (e) => {
+    if (!e.target.classList.contains('sos-select-search')) return;
+    const ctl = getCtl(e.target);
+    if (!ctl) return;
+
+    const term = e.target.value.trim().toLowerCase();
+    ctl.filtered = term ? ctl.options.filter((o) => o.search.includes(term)) : ctl.options;
+    renderOptions(ctl);
+  };
+
+  const onDynamicKeydown = (e) => {
+    const ctl = getCtl(e.target);
+    if (!ctl || ctl.status !== 'ready') return;
+
+    // Trigger: ArrowUp/Down open the menu (Enter/Space already click the button)
+    if (!e.target.classList.contains('sos-select-search')) {
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target.closest('.sos-select-trigger')) {
+        e.preventDefault();
+        openMenu(ctl);
+      }
+      return;
+    }
+
+    // Search box: navigate / pick / leave. Escape is handled in onKeydown().
+    const n = ctl.filtered.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!n) return;
+      ctl.active = (ctl.active + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
+      updateActive(ctl);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const opt = ctl.filtered[ctl.active];
+      if (opt) toggleOption(ctl, opt);
+    } else if (e.key === 'Tab') {
+      closeMenu(ctl, true);            // focus goes back to the trigger, then Tab moves on naturally
+    }
+  };
+
+  /** A click anywhere in the modal outside an open select closes its menu. */
+  const onModalClickCloseMenu = (e) => {
+    if (dyn.openCtl && !e.target.closest('.sos-select')) closeMenu(dyn.openCtl);
+  };
+  // ==========================================================
+  // END DYNAMIC OTHER ATTRIBUTES
+  // ==========================================================
 
   // ==========================================================
   // ACTIONS
@@ -736,14 +1175,20 @@ const fetchAlertsForCategory = async (category, force = false) => {
     els.sendBtn.innerHTML = '<span class="sos-send-spinner" aria-hidden="true"></span> Sending\u2026';
 
     const url = config.postAlertUrl || `${config.apiBase}/sos-alert`;
-    const other_attributes= config.context || {};
+
+    // DYNAMIC OTHER ATTRIBUTES — context first, otherAttributes wins on duplicate keys
+    const dynamicAttributes = collectDynamicAttributes();
+    const other_attributes = { ...(config.context || {}), ...dynamicAttributes };
+    // END DYNAMIC OTHER ATTRIBUTES
+
     // ── sendAlert() — MODIFIED: payload now includes category ──
-  const payload = {
-    category: state.selectedCategory,   // NEW
-    alert: alertText,
-    other_attributes: other_attributes
-  };
-    log('sending alert', payload); // silent unless debug: true
+    const payload = {
+        sos_recid: state.selectedRecId,
+        category: state.selectedCategory,
+        alert: alertText,
+        other_attributes: other_attributes
+    };
+        log('sending alert', payload); // silent unless debug: true
 
     try {
       const data = await request(url, { method: 'POST', body: payload });
@@ -791,6 +1236,8 @@ const fetchAlertsForCategory = async (category, force = false) => {
     els.grid.innerHTML = '';
     els.alertSection.hidden = true; // MODIFIED — was: els.categorySelect.value = ''; showGridHint(...)
 
+    renderDynamicAttributes(); // DYNAMIC OTHER ATTRIBUTES — fresh resolve on every open
+
     fetchCategories();
 
     setTimeout(() => {
@@ -816,6 +1263,8 @@ const closeModal = () => {
   state.alerts = [];
   hideOtherInput();
   if (els.alertSection) els.alertSection.hidden = true; // NEW — keeps re-open state clean
+
+  resetDynamicAttributes(); // DYNAMIC OTHER ATTRIBUTES — drop selections + generated DOM
 
   if (lastFocusedEl && typeof lastFocusedEl.focus === 'function') {
     lastFocusedEl.focus();
@@ -843,6 +1292,12 @@ const closeModal = () => {
     if (!els.overlay || !els.overlay.classList.contains('sos-open')) return;
 
     if (e.key === 'Escape') {
+      // DYNAMIC OTHER ATTRIBUTES — first Escape closes an open dropdown, not the whole modal
+      if (dyn.openCtl) {
+        closeMenu(dyn.openCtl, true);
+        return;
+      }
+      // END DYNAMIC OTHER ATTRIBUTES
       closeModal();
       return;
     }
@@ -901,6 +1356,14 @@ const closeModal = () => {
    * @param {string|HTMLElement} options.button - Selector or element for the trigger button.
    * @param {string} [options.apiBase='/app'] - Base path for the SOS endpoints.
    * @param {Object} [options.context={}] - Additional page context sent separately as other_attributes.
+   * @param {Object} [options.otherAttributes={}] - Dynamic SOS attributes, merged into other_attributes
+   *   (wins over `context` on duplicate keys). Each key except "message" becomes an optional searchable
+   *   select labelled "Select <Key>". Its value may be:
+   *     - an array of strings              ['Machine 101', 'Machine 102']
+   *     - an array of { value, label }     [{ value: 'M101', label: 'Machine 101' }]
+   *     - a function / async function returning either of the above (re-run on every modal open)
+   *   The key "message" is data-only: no UI is created, the value (or function result) is sent as-is.
+   *   The selected option's `value` is sent under the exact key supplied. Unselected selects are omitted.
    * @param {string} [options.getAlertsUrl] - Full override for the GET alerts URL.
    * @param {string} [options.postAlertUrl] - Full override for the POST alert URL.
    * @param {number} [options.cacheDuration=300000] - ms to reuse a cached alerts list (0 disables caching).
@@ -938,6 +1401,8 @@ const closeModal = () => {
 
     if (state.abortController) state.abortController.abort();
 
+    resetDynamicAttributes(); // DYNAMIC OTHER ATTRIBUTES — before els is nulled
+
     if (els.overlay) {
       unbindModalEvents();
       els.overlay.remove();
@@ -947,7 +1412,7 @@ const closeModal = () => {
   // ── destroy() — MODIFIED: reset new fields too ──
   els = {
     triggerBtn: null, overlay: null, modal: null, categoryGrid: null, alertSection: null,
-    grid: null, sendBtn: null, closeBtn: null,
+    grid: null, dynamicContainer: null, sendBtn: null, closeBtn: null,
     otherWrapper: null, otherInput: null, otherCounter: null, otherError: null,
   };
   state = {
@@ -957,7 +1422,7 @@ const closeModal = () => {
     isSending: false, initialized: false, abortController: null,
   };
     config = {
-      button: null, apiBase: '/app', context: {}, getAlertsUrl: null, postAlertUrl: null,
+      button: null, apiBase: '/app', context: {}, otherAttributes: {}, getAlertsUrl: null, postAlertUrl: null,
       cacheDuration: 300000, debug: false, onSuccess: null, onError: null,
     };
   };
